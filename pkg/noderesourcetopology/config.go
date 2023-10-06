@@ -17,8 +17,8 @@ limitations under the License.
 package noderesourcetopology
 
 import (
-	"k8s.io/klog/v2"
 	kubeletconfig "k8s.io/kubernetes/pkg/kubelet/apis/config"
+	nrtlog "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 )
@@ -82,16 +82,16 @@ func updateTopologyManagerConfigFromAttributes(conf *TopologyManagerConfig, attr
 
 func updateTopologyManagerConfigFromTopologyPolicies(conf *TopologyManagerConfig, nodeName string, topologyPolicies []string) {
 	if len(topologyPolicies) == 0 {
-		klog.V(3).InfoS("Cannot determine policy", "node", nodeName)
+		nrtlog.Get().V(3).Info("Cannot determine policy", "node", nodeName)
 		return
 	}
 	if len(topologyPolicies) > 1 {
-		klog.V(4).InfoS("Ignoring extra policies", "node", nodeName, "policies count", len(topologyPolicies)-1)
+		nrtlog.Get().V(4).Info("Ignoring extra policies", "node", nodeName, "policies count", len(topologyPolicies)-1)
 	}
 
 	policyName := topologyv1alpha2.TopologyManagerPolicy(topologyPolicies[0])
-	klog.Warning("The `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
-	klog.Warning("The `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
+	nrtlog.Get().Info("The `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
+	nrtlog.Get().Info("The `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
 
 	switch policyName {
 	case topologyv1alpha2.SingleNUMANodePodLevel:

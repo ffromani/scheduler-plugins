@@ -23,6 +23,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
@@ -203,7 +204,7 @@ func TestNRTStoreGet(t *testing.T) {
 			},
 		},
 	}
-	ns := newNrtStore(nrts)
+	ns := newNrtStore(nrts, logr.Discard())
 
 	obj := ns.GetNRTCopyByNodeName("node-0")
 	obj.TopologyPolicies[0] = "single-numa-node"
@@ -239,7 +240,7 @@ func TestNRTStoreUpdate(t *testing.T) {
 			},
 		},
 	}
-	ns := newNrtStore(nrts)
+	ns := newNrtStore(nrts, logr.Discard())
 
 	nrt3 := &topologyv1alpha2.NodeResourceTopology{
 		ObjectMeta: metav1.ObjectMeta{
@@ -259,14 +260,14 @@ func TestNRTStoreUpdate(t *testing.T) {
 }
 
 func TestNRTStoreGetMissing(t *testing.T) {
-	ns := newNrtStore(nil)
+	ns := newNrtStore(nil, logr.Discard())
 	if ns.GetNRTCopyByNodeName("node-missing") != nil {
 		t.Errorf("missing node returned non-nil data")
 	}
 }
 
 func TestNRTStoreContains(t *testing.T) {
-	ns := newNrtStore(nil)
+	ns := newNrtStore(nil, logr.Discard())
 	if ns.Contains("node-0") {
 		t.Errorf("unexpected node found")
 	}
@@ -289,7 +290,7 @@ func TestNRTStoreContains(t *testing.T) {
 			},
 		},
 	}
-	ns = newNrtStore(nrts)
+	ns = newNrtStore(nrts, logr.Discard())
 	if !ns.Contains("node-0") {
 		t.Errorf("missing node")
 	}
@@ -410,7 +411,7 @@ func TestResourceStoreAddPod(t *testing.T) {
 		},
 	}
 
-	rs := newResourceStore()
+	rs := newResourceStore(logr.Discard())
 	existed := rs.AddPod(&pod)
 	if existed {
 		t.Fatalf("replaced a pod into a empty resourceStore")
@@ -442,7 +443,7 @@ func TestResourceStoreDeletePod(t *testing.T) {
 		},
 	}
 
-	rs := newResourceStore()
+	rs := newResourceStore(logr.Discard())
 	existed := rs.DeletePod(&pod)
 	if existed {
 		t.Fatalf("deleted a pod into a empty resourceStore")
@@ -509,7 +510,7 @@ func TestResourceStoreUpdate(t *testing.T) {
 		},
 	}
 
-	rs := newResourceStore()
+	rs := newResourceStore(logr.Discard())
 	existed := rs.AddPod(&pod)
 	if existed {
 		t.Fatalf("replacing a pod into a empty resourceStore")
@@ -682,7 +683,7 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				pods: tcase.pods,
 				err:  tcase.err,
 			}
-			got, err := makeNodeToPodDataMap(podLister, tcase.description)
+			got, err := makeNodeToPodDataMap(podLister)
 			if err != tcase.expectedErr {
 				t.Errorf("error mismatch: got %v expected %v", err, tcase.expectedErr)
 			}
@@ -710,7 +711,7 @@ func TestCheckPodFingerprintForNode(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.description, func(t *testing.T) {
-			gotErr := checkPodFingerprintForNode("testing", tcase.objs, "test-node", tcase.pfp, tcase.onlyExclRes)
+			gotErr := checkPodFingerprintForNode(logr.Discard(), tcase.objs, "test-node", tcase.pfp, tcase.onlyExclRes)
 			if !errors.Is(gotErr, tcase.expectedErr) {
 				t.Errorf("got error %v expected %v", gotErr, tcase.expectedErr)
 			}

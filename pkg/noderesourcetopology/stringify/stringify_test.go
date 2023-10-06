@@ -36,13 +36,13 @@ func TestResourceListToLoggable(t *testing.T) {
 			name:      "empty",
 			logID:     "",
 			resources: corev1.ResourceList{},
-			expected:  ` logID=""`,
+			expected:  ` listName=""`,
 		},
 		{
 			name:      "only logID",
 			logID:     "TEST1",
 			resources: corev1.ResourceList{},
-			expected:  ` logID="TEST1"`,
+			expected:  ` listName="TEST1"`,
 		},
 		{
 			name:  "only CPUs",
@@ -50,7 +50,7 @@ func TestResourceListToLoggable(t *testing.T) {
 			resources: corev1.ResourceList{
 				corev1.ResourceCPU: resource.MustParse("16"),
 			},
-			expected: ` logID="TEST1" cpu="16"`,
+			expected: ` listName="TEST1" cpu="16"`,
 		},
 		{
 			name:  "only Memory",
@@ -58,7 +58,7 @@ func TestResourceListToLoggable(t *testing.T) {
 			resources: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse("16Gi"),
 			},
-			expected: ` logID="TEST2" memory="16 GiB"`,
+			expected: ` listName="TEST2" memory="16 GiB"`,
 		},
 		{
 			name:  "CPUs and Memory, no logID",
@@ -67,7 +67,7 @@ func TestResourceListToLoggable(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("24"),
 				corev1.ResourceMemory: resource.MustParse("16Gi"),
 			},
-			expected: ` logID="" cpu="24" memory="16 GiB"`,
+			expected: ` listName="" cpu="24" memory="16 GiB"`,
 		},
 		{
 			name:  "CPUs and Memory",
@@ -76,7 +76,7 @@ func TestResourceListToLoggable(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("24"),
 				corev1.ResourceMemory: resource.MustParse("16Gi"),
 			},
-			expected: ` logID="TEST3" cpu="24" memory="16 GiB"`,
+			expected: ` listName="TEST3" cpu="24" memory="16 GiB"`,
 		},
 		{
 			name:  "CPUs, Memory, hugepages-2Mi",
@@ -86,7 +86,7 @@ func TestResourceListToLoggable(t *testing.T) {
 				corev1.ResourceMemory:                resource.MustParse("16Gi"),
 				corev1.ResourceName("hugepages-2Mi"): resource.MustParse("1Gi"),
 			},
-			expected: ` logID="TEST4" cpu="24" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
+			expected: ` listName="TEST4" cpu="24" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
 		},
 		{
 			name:  "CPUs, Memory, hugepages-2Mi, hugepages-1Gi",
@@ -97,7 +97,7 @@ func TestResourceListToLoggable(t *testing.T) {
 				corev1.ResourceName("hugepages-2Mi"): resource.MustParse("1Gi"),
 				corev1.ResourceName("hugepages-1Gi"): resource.MustParse("2Gi"),
 			},
-			expected: ` logID="TEST4" cpu="24" hugepages-1Gi="2.0 GiB" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
+			expected: ` listName="TEST4" cpu="24" hugepages-1Gi="2.0 GiB" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
 		},
 		{
 			name:  "CPUs, Memory, hugepages-2Mi, devices",
@@ -109,7 +109,7 @@ func TestResourceListToLoggable(t *testing.T) {
 				corev1.ResourceName("example.com/netdevice"): resource.MustParse("16"),
 				corev1.ResourceName("awesome.net/gpu"):       resource.MustParse("4"),
 			},
-			expected: ` logID="TEST4" awesome.net/gpu="4" cpu="24" example.com/netdevice="16" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
+			expected: ` listName="TEST4" awesome.net/gpu="4" cpu="24" example.com/netdevice="16" hugepages-2Mi="1.0 GiB" memory="16 GiB"`,
 		},
 	}
 

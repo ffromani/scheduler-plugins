@@ -29,6 +29,7 @@ import (
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	faketopologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/clientset/versioned/fake"
 	topologyinformers "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/informers/externalversions"
@@ -203,7 +204,7 @@ func TestNodeResourceScorePlugin(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			tm := &TopologyMatch{
 				scoreStrategyFunc: test.strategy,
-				nrtCache:          nrtcache.NewPassthrough(lister),
+				nrtCache:          nrtcache.NewPassthrough(lister, logr.Discard()),
 			}
 
 			for _, req := range test.requests {
@@ -502,7 +503,7 @@ func TestNodeResourceScorePluginLeastNUMA(t *testing.T) {
 
 			tm := &TopologyMatch{
 				scoreStrategyType: apiconfig.LeastNUMANodes,
-				nrtCache:          nrtcache.NewPassthrough(lister),
+				nrtCache:          nrtcache.NewPassthrough(lister, logr.Discard()),
 			}
 			nodeToScore := make(nodeToScoreMap, len(nodesMap))
 			pod := makePodByResourceLists(tc.podRequests...)

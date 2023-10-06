@@ -18,27 +18,29 @@ package cache
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	listerv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/listers/topology/v1alpha2"
 )
 
 type Passthrough struct {
 	lister listerv1alpha2.NodeResourceTopologyLister
+	lh     logr.Logger
 }
 
-func NewPassthrough(lister listerv1alpha2.NodeResourceTopologyLister) Interface {
+func NewPassthrough(lister listerv1alpha2.NodeResourceTopologyLister, lh logr.Logger) Interface {
 	return Passthrough{
 		lister: lister,
+		lh:     lh,
 	}
 }
 
 func (pt Passthrough) GetCachedNRTCopy(nodeName string, _ *corev1.Pod) (*topologyv1alpha2.NodeResourceTopology, bool) {
-	klog.V(5).InfoS("Lister for nodeResTopoPlugin", "lister", pt.lister)
+	pt.lh.V(5).Info("Lister for nodeResTopoPlugin", "lister", pt.lister)
 	nrt, err := pt.lister.Get(nodeName)
 	if err != nil {
-		klog.V(5).ErrorS(err, "Cannot get NodeTopologies from NodeResourceTopologyLister")
+		pt.lh.V(5).Error(err, "Cannot get NodeTopologies from NodeResourceTopologyLister")
 		return nil, true
 	}
 	return nrt, true

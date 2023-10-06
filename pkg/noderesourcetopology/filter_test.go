@@ -29,6 +29,7 @@ import (
 
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	faketopologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/clientset/versioned/fake"
 	topologyinformers "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/informers/externalversions"
@@ -680,7 +681,7 @@ func TestNodeResourceTopology(t *testing.T) {
 	}
 
 	tm := TopologyMatch{
-		nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister()),
+		nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister(), logr.Discard()),
 	}
 
 	for _, tt := range tests {
@@ -895,7 +896,7 @@ func TestNodeResourceTopologyMultiContainerPodScope(t *testing.T) {
 			}
 
 			tm := TopologyMatch{
-				nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister()),
+				nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister(), logr.Discard()),
 			}
 
 			nodeInfo := framework.NewNodeInfo()
@@ -1152,7 +1153,7 @@ func TestNodeResourceTopologyMultiContainerContainerScope(t *testing.T) {
 			}
 
 			tm := TopologyMatch{
-				nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister()),
+				nrtCache: nrtcache.NewPassthrough(fakeInformer.Lister(), logr.Discard()),
 			}
 
 			nodeInfo := framework.NewNodeInfo()

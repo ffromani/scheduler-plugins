@@ -22,13 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/apis/config/validation"
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
+	nrtlog "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 
+	"github.com/go-logr/logr"
 	topologyapi "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 )
@@ -84,8 +85,8 @@ func subtractFromNUMAs(resources v1.ResourceList, numaNodes NUMANodeList, nodes 
 	}
 }
 
-type filterFn func(pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status
-type scoringFn func(*v1.Pod, topologyv1alpha2.ZoneList) (int64, *framework.Status)
+type filterFn func(pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo, lh logr.Logger) *framework.Status
+type scoringFn func(*v1.Pod, topologyv1alpha2.ZoneList, logr.Logger) (int64, *framework.Status)
 
 // TopologyMatch plugin which run simplified version of TopologyManager's admit handler
 type TopologyMatch struct {
@@ -93,6 +94,7 @@ type TopologyMatch struct {
 	nrtCache            nrtcache.Interface
 	scoreStrategyFunc   scoreStrategyFn
 	scoreStrategyType   apiconfig.ScoringStrategyType
+	log                 logr.Logger
 }
 
 var _ framework.FilterPlugin = &TopologyMatch{}
@@ -108,7 +110,8 @@ func (tm *TopologyMatch) Name() string {
 
 // New initializes a new plugin and returns it.
 func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	klog.V(5).InfoS("Creating new TopologyMatch plugin")
+	lh := nrtlog.Get()
+	lh.V(5).Info("Creating new TopologyMatch plugin")
 	tcfg, ok := args.(*apiconfig.NodeResourceTopologyMatchArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NodeResourceTopologyMatchArgs, got %T", args)
@@ -118,9 +121,9 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 		return nil, err
 	}
 
-	nrtCache, err := initNodeTopologyInformer(tcfg, handle)
+	nrtCache, err := initNodeTopologyInformer(tcfg, handle, lh)
 	if err != nil {
-		klog.ErrorS(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
+		lh.Error(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
 		return nil, err
 	}
 
@@ -144,6 +147,7 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 		nrtCache:            nrtCache,
 		scoreStrategyFunc:   strategy,
 		scoreStrategyType:   tcfg.ScoringStrategy.Type,
+		log:                 lh,
 	}
 
 	return topologyMatch, nil

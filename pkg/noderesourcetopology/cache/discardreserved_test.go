@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	faketopologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/clientset/versioned/fake"
 	topologyinformers "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/informers/externalversions"
@@ -32,7 +33,7 @@ func TestDiscardReservedNodesGetNRTCopy(t *testing.T) {
 	fakeClient := faketopologyv1alpha2.NewSimpleClientset()
 	fakeInformer := topologyinformers.NewSharedInformerFactory(fakeClient, 0).Topology().V1alpha2().NodeResourceTopologies()
 
-	nrtCache := NewDiscardReserved(fakeInformer.Lister())
+	nrtCache := NewDiscardReserved(fakeInformer.Lister(), logr.Discard())
 	var nrtObj *topologyv1alpha2.NodeResourceTopology
 	nrtObj, _ = nrtCache.GetCachedNRTCopy("node1", &corev1.Pod{})
 	if nrtObj != nil {
