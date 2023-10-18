@@ -28,6 +28,7 @@ import (
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"gonum.org/v1/gonum/stat/combin"
 
+	nrtlog "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
@@ -37,7 +38,7 @@ const (
 )
 
 func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(nrtlog.PodRef(pod), "", zones)
 	qos := v1qos.GetPodQOS(pod)
 
 	maxNUMANodesCount := 0
@@ -79,7 +80,7 @@ func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) 
 }
 
 func leastNUMAPodScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(nrtlog.PodRef(pod), "", zones)
 	qos := v1qos.GetPodQOS(pod)
 
 	identifier := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
