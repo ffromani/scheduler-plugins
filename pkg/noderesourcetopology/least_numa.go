@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager/bitmask"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
@@ -28,6 +27,7 @@ import (
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"gonum.org/v1/gonum/stat/combin"
 
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
@@ -37,6 +37,7 @@ const (
 )
 
 func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
+	lh := logging.Log()
 	nodes := createNUMANodeList(zones)
 	qos := v1qos.GetPodQOS(pod)
 
@@ -54,7 +55,7 @@ func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) 
 		// container's resources can't fit onto node, return MinNodeScore for whole pod
 		if numaNodes == nil {
 			// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
-			klog.InfoS("cannot calculate how many NUMA nodes are required", "logID", identifier)
+			lh.Info("cannot calculate how many NUMA nodes are required", "logID", identifier)
 			return framework.MinNodeScore, nil
 		}
 
@@ -79,6 +80,7 @@ func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) 
 }
 
 func leastNUMAPodScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
+	lh := logging.Log()
 	nodes := createNUMANodeList(zones)
 	qos := v1qos.GetPodQOS(pod)
 
@@ -94,7 +96,7 @@ func leastNUMAPodScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64
 	// pod's resources can't fit onto node, return MinNodeScore
 	if numaNodes == nil {
 		// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
-		klog.InfoS("cannot calculate how many NUMA nodes are required", "logID", identifier)
+		lh.Info("cannot calculate how many NUMA nodes are required", "logID", identifier)
 		return framework.MinNodeScore, nil
 	}
 
@@ -127,6 +129,7 @@ func minAvgDistanceInCombinations(numaNodes NUMANodeList, numaNodesCombination [
 }
 
 func nodesAvgDistance(numaNodes NUMANodeList, nodes ...int) float32 {
+	lh := logging.Log()
 	if len(nodes) == 0 {
 		return maxDistanceValue
 	}
@@ -140,7 +143,7 @@ func nodesAvgDistance(numaNodes NUMANodeList, nodes ...int) float32 {
 			cost, ok := numaNodes[node1].Costs[numaNodes[node2].NUMAID]
 			// we couldn't read Costs assign maxDistanceValue
 			if !ok {
-				klog.InfoS("cannot retrieve Costs information", "nodeID", numaNodes[node1].NUMAID)
+				lh.Info("cannot retrieve Costs information", "nodeID", numaNodes[node1].NUMAID)
 				cost = maxDistanceValue
 			}
 			accu += cost
@@ -221,9 +224,10 @@ func findSuitableCombination(identifier string, qos v1.PodQOSClass, numaNodes NU
 }
 
 func checkResourcesFit(identifier string, qos v1.PodQOSClass, resources v1.ResourceList, combinationResources v1.ResourceList) bool {
+	lh := logging.Log()
 	for resource, quantity := range resources {
 		if quantity.IsZero() {
-			klog.V(4).InfoS("ignoring zero-qty resource request", "identifier", identifier, "resource", resource)
+			lh.V(4).Info("ignoring zero-qty resource request", "identifier", identifier, "resource", resource)
 			continue
 		}
 		if combinationQuantity := combinationResources[resource]; !isResourceSetSuitable(qos, resource, quantity, combinationQuantity) {

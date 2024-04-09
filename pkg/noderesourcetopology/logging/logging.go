@@ -14,36 +14,42 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package noderesourcetopology
+package logging
 
 import (
 	"encoding/json"
-	"fmt"
 
-	"k8s.io/klog/v2"
+	"github.com/go-logr/logr"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
-
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
 )
 
-func logNumaNodes(desc, nodeName string, nodes NUMANodeList) {
-	for _, numaNode := range nodes {
-		numaLogKey := fmt.Sprintf("%s/node-%d", nodeName, numaNode.NUMAID)
-		klog.V(6).InfoS(desc, stringify.ResourceListToLoggable(numaLogKey, numaNode.Resources)...)
-	}
+// before to replace with FromContext(), at least in filter and score,
+// we would need a way to inject a logger instance (preferably a
+// per-plugin logger instance) when we create the Scheduler
+// (with app.NewSchedulerCommand)
+
+var logh logr.Logger
+
+func SetLogger(lh logr.Logger) {
+	logh = lh
 }
 
-func logNRT(desc string, nrtObj *topologyv1alpha2.NodeResourceTopology) {
-	if !klog.V(6).Enabled() {
+func Log() logr.Logger {
+	return logh
+}
+
+func NRT(desc string, nrtObj *topologyv1alpha2.NodeResourceTopology) {
+	lh := Log()
+	if !lh.V(6).Enabled() {
 		// avoid the expensive marshal operation
 		return
 	}
 
 	ntrJson, err := json.MarshalIndent(nrtObj, "", " ")
 	if err != nil {
-		klog.V(6).ErrorS(err, "failed to marshal noderesourcetopology object")
+		lh.V(6).Error(err, "failed to marshal noderesourcetopology object")
 		return
 	}
-	klog.V(6).Info(desc, "noderesourcetopology", string(ntrJson))
+	lh.V(6).Info(desc, "noderesourcetopology", string(ntrJson))
 }

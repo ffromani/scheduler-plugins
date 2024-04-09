@@ -30,6 +30,7 @@ import (
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/apis/config/validation"
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 
 	topologyapi "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
@@ -117,7 +118,11 @@ func (tm *TopologyMatch) Name() string {
 
 // New initializes a new plugin and returns it.
 func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	klog.V(5).InfoS("Creating new TopologyMatch plugin")
+	// we do this later to make sure klog is initialized. We don't need this anyway before this point
+	lh := klog.Background()
+	logging.SetLogger(lh)
+
+	lh.V(5).Info("Creating new TopologyMatch plugin")
 	tcfg, ok := args.(*apiconfig.NodeResourceTopologyMatchArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NodeResourceTopologyMatchArgs, got %T", args)
@@ -129,7 +134,7 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 
 	nrtCache, err := initNodeTopologyInformer(tcfg, handle)
 	if err != nil {
-		klog.ErrorS(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
+		lh.Error(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
 		return nil, err
 	}
 
