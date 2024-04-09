@@ -81,7 +81,7 @@ func initNodeTopologyForeignPodsDetection(cfg *apiconfig.NodeResourceTopologyCac
 	}
 	fwk, ok := handle.(framework.Framework)
 	if !ok {
-		klog.Warningf("cannot determine the scheduler profile names - no foreign pod detection enabled")
+		klog.Info("cannot determine the scheduler profile names - no foreign pod detection enabled")
 		return
 	}
 

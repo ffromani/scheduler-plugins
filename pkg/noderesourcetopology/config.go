@@ -89,8 +89,8 @@ func updateTopologyManagerConfigFromTopologyPolicies(conf *TopologyManagerConfig
 	}
 
 	policyName := topologyv1alpha2.TopologyManagerPolicy(topologyPolicies[0])
-	klog.Warning("The `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
-	klog.Warning("The `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
+	klog.Info("The `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
+	klog.Info("The `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
 
 	switch policyName {
 	case topologyv1alpha2.SingleNUMANodePodLevel:

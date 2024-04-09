@@ -54,7 +54,7 @@ func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) 
 		// container's resources can't fit onto node, return MinNodeScore for whole pod
 		if numaNodes == nil {
 			// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
-			klog.Warningf("cannot calculate how many NUMA nodes are required for: %s", identifier)
+			klog.InfoS("cannot calculate how many NUMA nodes are required", "logID", identifier)
 			return framework.MinNodeScore, nil
 		}
 
@@ -94,7 +94,7 @@ func leastNUMAPodScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64
 	// pod's resources can't fit onto node, return MinNodeScore
 	if numaNodes == nil {
 		// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
-		klog.Warningf("cannot calculate how many NUMA nodes are required for: %s", identifier)
+		klog.InfoS("cannot calculate how many NUMA nodes are required", "logID", identifier)
 		return framework.MinNodeScore, nil
 	}
 
@@ -140,7 +140,7 @@ func nodesAvgDistance(numaNodes NUMANodeList, nodes ...int) float32 {
 			cost, ok := numaNodes[node1].Costs[numaNodes[node2].NUMAID]
 			// we couldn't read Costs assign maxDistanceValue
 			if !ok {
-				klog.Warningf("cannot retrieve Costs information for node ID %d", numaNodes[node1].NUMAID)
+				klog.InfoS("cannot retrieve Costs information", "nodeID", numaNodes[node1].NUMAID)
 				cost = maxDistanceValue
 			}
 			accu += cost
