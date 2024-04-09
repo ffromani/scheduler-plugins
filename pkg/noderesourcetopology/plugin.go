@@ -132,7 +132,7 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 		return nil, err
 	}
 
-	nrtCache, err := initNodeTopologyInformer(tcfg, handle)
+	nrtCache, err := initNodeTopologyInformer(lh, tcfg, handle)
 	if err != nil {
 		lh.Error(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
 		return nil, err

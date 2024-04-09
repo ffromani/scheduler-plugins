@@ -28,7 +28,6 @@ import (
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
@@ -229,8 +228,7 @@ type podData struct {
 // checkPodFingerprintForNode verifies if the given pods fingeprint (usually from NRT update) matches the
 // computed one using the stored data about pods running on nodes. Returns nil on success, or an error
 // describing the failure
-func checkPodFingerprintForNode(logID string, objs []podData, nodeName, pfpExpected string, onlyExclRes bool) error {
-	lh := logging.Log()
+func checkPodFingerprintForNode(lh logr.Logger, logID string, objs []podData, nodeName, pfpExpected string, onlyExclRes bool) error {
 	st := podfingerprint.MakeStatus(nodeName)
 	pfp := podfingerprint.NewTracingFingerprint(len(objs), &st)
 	for _, obj := range objs {

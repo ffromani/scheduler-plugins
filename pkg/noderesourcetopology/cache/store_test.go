@@ -582,7 +582,7 @@ func TestCheckPodFingerprintForNode(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.description, func(t *testing.T) {
-			gotErr := checkPodFingerprintForNode("testing", tcase.objs, "test-node", tcase.pfp, tcase.onlyExclRes)
+			gotErr := checkPodFingerprintForNode(klog.Background(), "testing", tcase.objs, "test-node", tcase.pfp, tcase.onlyExclRes)
 			if !errors.Is(gotErr, tcase.expectedErr) {
 				t.Errorf("got error %v expected %v", gotErr, tcase.expectedErr)
 			}

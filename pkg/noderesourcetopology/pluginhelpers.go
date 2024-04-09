@@ -25,6 +25,7 @@ import (
 	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2/helper/numanode"
 
@@ -41,8 +42,7 @@ const (
 	maxNUMAId = 64
 )
 
-func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, handle framework.Handle) (nrtcache.Interface, error) {
-	lh := logging.Log()
+func initNodeTopologyInformer(lh logr.Logger, tcfg *apiconfig.NodeResourceTopologyMatchArgs, handle framework.Handle) (nrtcache.Interface, error) {
 	client, err := ctrlclient.New(handle.KubeConfig(), ctrlclient.Options{Scheme: scheme})
 	if err != nil {
 		lh.Error(err, "Cannot create client for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
@@ -50,21 +50,21 @@ func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, han
 	}
 
 	if tcfg.DiscardReservedNodes {
-		return nrtcache.NewDiscardReserved(client), nil
+		return nrtcache.NewDiscardReserved(lh, client), nil
 	}
 
 	if tcfg.CacheResyncPeriodSeconds <= 0 {
-		return nrtcache.NewPassthrough(client), nil
+		return nrtcache.NewPassthrough(lh, client), nil
 	}
 
 	podSharedInformer, podLister, isPodRelevant := podprovider.NewFromHandle(lh, handle, tcfg.Cache)
 
-	nrtCache, err := nrtcache.NewOverReserve(tcfg.Cache, client, podLister, isPodRelevant)
+	nrtCache, err := nrtcache.NewOverReserve(lh, tcfg.Cache, client, podLister, isPodRelevant)
 	if err != nil {
 		return nil, err
 	}
 
-	initNodeTopologyForeignPodsDetection(tcfg.Cache, handle, podSharedInformer, nrtCache)
+	initNodeTopologyForeignPodsDetection(lh, tcfg.Cache, handle, podSharedInformer, nrtCache)
 
 	resyncPeriod := time.Duration(tcfg.CacheResyncPeriodSeconds) * time.Second
 	go wait.Forever(nrtCache.Resync, resyncPeriod)
@@ -74,9 +74,8 @@ func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, han
 	return nrtCache, nil
 }
 
-func initNodeTopologyForeignPodsDetection(cfg *apiconfig.NodeResourceTopologyCache, handle framework.Handle, podSharedInformer k8scache.SharedInformer, nrtCache *nrtcache.OverReserve) {
-	lh := logging.Log()
-	foreignPodsDetect := getForeignPodsDetectMode(cfg)
+func initNodeTopologyForeignPodsDetection(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, handle framework.Handle, podSharedInformer k8scache.SharedInformer, nrtCache *nrtcache.OverReserve) {
+	foreignPodsDetect := getForeignPodsDetectMode(lh, cfg)
 
 	if foreignPodsDetect == apiconfig.ForeignPodsDetectNone {
 		lh.Info("foreign pods detection disabled by configuration")
@@ -96,8 +95,8 @@ func initNodeTopologyForeignPodsDetection(cfg *apiconfig.NodeResourceTopologyCac
 	} else {
 		nrtcache.TrackAllForeignPods()
 	}
-	nrtcache.RegisterSchedulerProfileName(profileName)
-	nrtcache.SetupForeignPodsDetector(profileName, podSharedInformer, nrtCache)
+	nrtcache.RegisterSchedulerProfileName(lh, profileName)
+	nrtcache.SetupForeignPodsDetector(lh, profileName, podSharedInformer, nrtCache)
 }
 
 func createNUMANodeList(zones topologyv1alpha2.ZoneList) NUMANodeList {
@@ -170,8 +169,7 @@ func onlyNonNUMAResources(numaNodes NUMANodeList, resources corev1.ResourceList)
 	return true
 }
 
-func getForeignPodsDetectMode(cfg *apiconfig.NodeResourceTopologyCache) apiconfig.ForeignPodsDetectMode {
-	lh := logging.Log()
+func getForeignPodsDetectMode(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache) apiconfig.ForeignPodsDetectMode {
 	var foreignPodsDetect apiconfig.ForeignPodsDetectMode
 	if cfg != nil && cfg.ForeignPodsDetect != nil {
 		foreignPodsDetect = *cfg.ForeignPodsDetect

@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/klog/v2"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 )
 
 // DiscardReserved is intended to solve similiar problem as Overreserve Cache,
@@ -46,12 +46,14 @@ type DiscardReserved struct {
 	rMutex         sync.RWMutex
 	reservationMap map[string]map[types.UID]bool // Key is NodeName, value is Pod UID : reserved status
 	client         ctrlclient.Client
+	lh             logr.Logger
 }
 
-func NewDiscardReserved(client ctrlclient.Client) Interface {
+func NewDiscardReserved(lh logr.Logger, client ctrlclient.Client) Interface {
 	return &DiscardReserved{
 		client:         client,
 		reservationMap: make(map[string]map[types.UID]bool),
+		lh:             lh,
 	}
 }
 
@@ -75,8 +77,7 @@ func (pt *DiscardReserved) NodeMaybeOverReserved(nodeName string, pod *corev1.Po
 func (pt *DiscardReserved) NodeHasForeignPods(nodeName string, pod *corev1.Pod)    {}
 
 func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
-	lh := logging.Log()
-	lh.V(5).Info("nrtcache NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("nrtcache NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 	pt.rMutex.Lock()
 	defer pt.rMutex.Unlock()
 
@@ -87,16 +88,14 @@ func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod
 }
 
 func (pt *DiscardReserved) UnreserveNodeResources(nodeName string, pod *corev1.Pod) {
-	lh := logging.Log()
-	lh.V(5).Info("nrtcache NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("nrtcache NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }
 
 // PostBind is invoked to cleanup reservationMap
 func (pt *DiscardReserved) PostBind(nodeName string, pod *corev1.Pod) {
-	lh := logging.Log()
-	lh.V(5).Info("nrtcache NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("nrtcache NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }

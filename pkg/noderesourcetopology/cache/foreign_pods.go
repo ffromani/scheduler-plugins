@@ -19,12 +19,12 @@ package cache
 import (
 	"fmt"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 )
 
@@ -38,8 +38,7 @@ var (
 	onlyExclusiveResources = false
 )
 
-func SetupForeignPodsDetector(schedProfileName string, podInformer k8scache.SharedInformer, cc Interface) {
-	lh := logging.Log()
+func SetupForeignPodsDetector(lh logr.Logger, schedProfileName string, podInformer k8scache.SharedInformer, cc Interface) {
 	foreignCache := func(obj interface{}) {
 		pod, ok := obj.(*corev1.Pod)
 		if !ok {
@@ -71,8 +70,7 @@ func TrackAllForeignPods() {
 	onlyExclusiveResources = false
 }
 
-func RegisterSchedulerProfileName(schedProfileName string) {
-	lh := logging.Log()
+func RegisterSchedulerProfileName(lh logr.Logger, schedProfileName string) {
 	lh.Info("nrtcache: setting up foreign pod detection", "profile", schedProfileName)
 	schedProfileNames.Insert(schedProfileName)
 

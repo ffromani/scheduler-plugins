@@ -36,7 +36,6 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/podprovider"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
@@ -57,13 +56,12 @@ type OverReserve struct {
 	isPodRelevant          podprovider.PodFilterFunc
 }
 
-func NewOverReserve(cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.Client, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
-	lh := logging.Log()
+func NewOverReserve(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.Client, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
 	if client == nil || podLister == nil {
 		return nil, fmt.Errorf("nrtcache: received nil references")
 	}
 
-	resyncMethod := getCacheResyncMethod(cfg)
+	resyncMethod := getCacheResyncMethod(lh, cfg)
 
 	nrtObjs := &topologyv1alpha2.NodeResourceTopologyList{}
 	// TODO: we should pass-in a context in the future
@@ -243,7 +241,7 @@ func (ov *OverReserve) Resync() {
 
 		ov.lh.V(6).Info("nrtcache: trying to resync NodeTopology", "logID", logID, "node", nodeName, "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
 
-		err = checkPodFingerprintForNode(logID, objs, nodeName, pfpExpected, onlyExclRes)
+		err = checkPodFingerprintForNode(ov.lh, logID, objs, nodeName, pfpExpected, onlyExclRes)
 		if errors.Is(err, podfingerprint.ErrSignatureMismatch) {
 			// can happen, not critical
 			ov.lh.V(5).Info("nrtcache: NodeTopology podset fingerprint mismatch", "logID", logID, "node", nodeName)
@@ -305,8 +303,7 @@ func logIDFromTime() string {
 	return fmt.Sprintf("resync%v", time.Now().UnixMilli())
 }
 
-func getCacheResyncMethod(cfg *apiconfig.NodeResourceTopologyCache) apiconfig.CacheResyncMethod {
-	lh := logging.Log()
+func getCacheResyncMethod(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache) apiconfig.CacheResyncMethod {
 	var resyncMethod apiconfig.CacheResyncMethod
 	if cfg != nil && cfg.ResyncMethod != nil {
 		resyncMethod = *cfg.ResyncMethod
