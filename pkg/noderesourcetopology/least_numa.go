@@ -38,7 +38,7 @@ const (
 )
 
 func leastNUMAContainerScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(lh, zones)
 	qos := v1qos.GetPodQOS(pod)
 
 	maxNUMANodesCount := 0
@@ -80,7 +80,7 @@ func leastNUMAContainerScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1a
 }
 
 func leastNUMAPodScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(lh, zones)
 	qos := v1qos.GetPodQOS(pod)
 
 	identifier := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)

@@ -47,11 +47,11 @@ func singleNUMAContainerLevelHandler(lh logr.Logger, pod *v1.Pod, zones topology
 	lh.V(5).Info("Single NUMA node handler")
 
 	// prepare NUMANodes list from zoneMap
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(lh, zones)
 	qos := v1qos.GetPodQOS(pod)
 
 	// Node() != nil already verified in Filter(), which is the only public entry point
-	logNumaNodes("container handler NUMA resources", nodeInfo.Node().Name, nodes)
+	logNumaNodes(lh, "container handler NUMA resources", nodeInfo.Node().Name, nodes)
 
 	// the init containers are running SERIALLY and BEFORE the normal containers.
 	// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#understanding-init-containers
@@ -183,13 +183,13 @@ func singleNUMAPodLevelHandler(lh logr.Logger, pod *v1.Pod, zones topologyv1alph
 	resources := util.GetPodEffectiveRequest(pod)
 
 	logID := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
-	nodes := createNUMANodeList(zones)
+	nodes := createNUMANodeList(lh, zones)
 
 	// Node() != nil already verified in Filter(), which is the only public entry point
-	logNumaNodes("pod handler NUMA resources", nodeInfo.Node().Name, nodes)
+	logNumaNodes(lh, "pod handler NUMA resources", nodeInfo.Node().Name, nodes)
 	lh.V(6).Info("target resources", stringify.ResourceListToLoggable(logID, resources)...)
 
-	if _, match := resourcesAvailableInAnyNUMANodes(lh, logID, createNUMANodeList(zones), resources, v1qos.GetPodQOS(pod), nodeInfo); !match {
+	if _, match := resourcesAvailableInAnyNUMANodes(lh, logID, createNUMANodeList(lh, zones), resources, v1qos.GetPodQOS(pod), nodeInfo); !match {
 		lh.V(2).Info("cannot align pod", "name", pod.Name)
 		return framework.NewStatus(framework.Unschedulable, "cannot align pod")
 	}

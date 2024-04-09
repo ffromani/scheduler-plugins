@@ -33,7 +33,6 @@ import (
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/podprovider"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
 )
@@ -99,8 +98,7 @@ func initNodeTopologyForeignPodsDetection(lh logr.Logger, cfg *apiconfig.NodeRes
 	nrtcache.SetupForeignPodsDetector(lh, profileName, podSharedInformer, nrtCache)
 }
 
-func createNUMANodeList(zones topologyv1alpha2.ZoneList) NUMANodeList {
-	lh := logging.Log()
+func createNUMANodeList(lh logr.Logger, zones topologyv1alpha2.ZoneList) NUMANodeList {
 	numaIDToZoneIDx := make([]int, maxNUMAId)
 	nodes := NUMANodeList{}
 	// filter non Node zones and create idToIdx lookup array
@@ -180,8 +178,7 @@ func getForeignPodsDetectMode(lh logr.Logger, cfg *apiconfig.NodeResourceTopolog
 	return foreignPodsDetect
 }
 
-func logNumaNodes(desc, nodeName string, nodes NUMANodeList) {
-	lh := logging.Log()
+func logNumaNodes(lh logr.Logger, desc, nodeName string, nodes NUMANodeList) {
 	for _, numaNode := range nodes {
 		numaLogKey := fmt.Sprintf("%s/node-%d", nodeName, numaNode.NUMAID)
 		lh.V(6).Info(desc, stringify.ResourceListToLoggable(numaLogKey, numaNode.Resources)...)
