@@ -29,6 +29,7 @@ import (
 	bm "k8s.io/kubernetes/pkg/kubelet/cm/topologymanager/bitmask"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
@@ -42,8 +43,7 @@ const highestNUMAID = 8
 
 type PolicyHandler func(pod *v1.Pod, zoneMap topologyv1alpha2.ZoneList) *framework.Status
 
-func singleNUMAContainerLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
-	lh := logging.Log()
+func singleNUMAContainerLevelHandler(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
 	lh.V(5).Info("Single NUMA node handler")
 
 	// prepare NUMANodes list from zoneMap
@@ -60,7 +60,7 @@ func singleNUMAContainerLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneLis
 		logID := fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, initContainer.Name)
 		lh.V(6).Info("target resources", stringify.ResourceListToLoggable(logID, initContainer.Resources.Requests)...)
 
-		_, match := resourcesAvailableInAnyNUMANodes(logID, nodes, initContainer.Resources.Requests, qos, nodeInfo)
+		_, match := resourcesAvailableInAnyNUMANodes(lh, logID, nodes, initContainer.Resources.Requests, qos, nodeInfo)
 		if !match {
 			// we can't align init container, so definitely we can't align a pod
 			lh.V(2).Info("cannot align container", "name", initContainer.Name, "kind", "init")
@@ -72,7 +72,7 @@ func singleNUMAContainerLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneLis
 		logID := fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
 		lh.V(6).Info("target resources", stringify.ResourceListToLoggable(logID, container.Resources.Requests)...)
 
-		numaID, match := resourcesAvailableInAnyNUMANodes(logID, nodes, container.Resources.Requests, qos, nodeInfo)
+		numaID, match := resourcesAvailableInAnyNUMANodes(lh, logID, nodes, container.Resources.Requests, qos, nodeInfo)
 		if !match {
 			// we can't align container, so definitely we can't align a pod
 			lh.V(2).Info("cannot align container", "name", container.Name, "kind", "app")
@@ -81,15 +81,14 @@ func singleNUMAContainerLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneLis
 
 		// subtract the resources requested by the container from the given NUMA.
 		// this is necessary, so we won't allocate the same resources for the upcoming containers
-		subtractFromNUMA(nodes, numaID, container)
+		subtractFromNUMA(lh, nodes, numaID, container)
 	}
 	return nil
 }
 
 // resourcesAvailableInAnyNUMANodes checks for sufficient resource and return the NUMAID that would be selected by Kubelet.
 // this function requires NUMANodeList with properly populated NUMANode, NUMAID should be in range 0-63
-func resourcesAvailableInAnyNUMANodes(logID string, numaNodes NUMANodeList, resources v1.ResourceList, qos v1.PodQOSClass, nodeInfo *framework.NodeInfo) (int, bool) {
-	lh := logging.Log()
+func resourcesAvailableInAnyNUMANodes(lh logr.Logger, logID string, numaNodes NUMANodeList, resources v1.ResourceList, qos v1.PodQOSClass, nodeInfo *framework.NodeInfo) (int, bool) {
 	numaID := highestNUMAID
 	bitmask := bm.NewEmptyBitMask()
 	// set all bits, each bit is a NUMA node, if resources couldn't be aligned
@@ -178,8 +177,7 @@ func isResourceSetSuitable(qos v1.PodQOSClass, resource v1.ResourceName, quantit
 	return numaQuantity.Cmp(quantity) >= 0
 }
 
-func singleNUMAPodLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
-	lh := logging.Log()
+func singleNUMAPodLevelHandler(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
 	lh.V(5).Info("Pod Level Resource handler")
 
 	resources := util.GetPodEffectiveRequest(pod)
@@ -191,7 +189,7 @@ func singleNUMAPodLevelHandler(pod *v1.Pod, zones topologyv1alpha2.ZoneList, nod
 	logNumaNodes("pod handler NUMA resources", nodeInfo.Node().Name, nodes)
 	lh.V(6).Info("target resources", stringify.ResourceListToLoggable(logID, resources)...)
 
-	if _, match := resourcesAvailableInAnyNUMANodes(logID, createNUMANodeList(zones), resources, v1qos.GetPodQOS(pod), nodeInfo); !match {
+	if _, match := resourcesAvailableInAnyNUMANodes(lh, logID, createNUMANodeList(zones), resources, v1qos.GetPodQOS(pod), nodeInfo); !match {
 		lh.V(2).Info("cannot align pod", "name", pod.Name)
 		return framework.NewStatus(framework.Unschedulable, "cannot align pod")
 	}
@@ -224,7 +222,7 @@ func (tm *TopologyMatch) Filter(ctx context.Context, cycleState *framework.Cycle
 	if handler == nil {
 		return nil
 	}
-	status := handler(pod, nodeTopology.Zones, nodeInfo)
+	status := handler(lh, pod, nodeTopology.Zones, nodeInfo)
 	if status != nil {
 		tm.nrtCache.NodeMaybeOverReserved(nodeName, pod)
 	}
@@ -232,8 +230,7 @@ func (tm *TopologyMatch) Filter(ctx context.Context, cycleState *framework.Cycle
 }
 
 // subtractFromNUMA finds the correct NUMA ID's resources and subtract them from `nodes`.
-func subtractFromNUMA(nodes NUMANodeList, numaID int, container v1.Container) {
-	lh := logging.Log()
+func subtractFromNUMA(lh logr.Logger, nodes NUMANodeList, numaID int, container v1.Container) {
 	for i := 0; i < len(nodes); i++ {
 		if nodes[i].NUMAID != numaID {
 			continue
