@@ -23,9 +23,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 )
 
 type Passthrough struct {
@@ -39,10 +39,11 @@ func NewPassthrough(client ctrlclient.Client) Interface {
 }
 
 func (pt Passthrough) GetCachedNRTCopy(ctx context.Context, nodeName string, _ *corev1.Pod) (*topologyv1alpha2.NodeResourceTopology, bool) {
-	klog.V(5).InfoS("Lister for nodeResTopoPlugin")
+	lh := logging.Log()
+	lh.V(5).Info("Lister for nodeResTopoPlugin")
 	nrt := &topologyv1alpha2.NodeResourceTopology{}
 	if err := pt.client.Get(ctx, types.NamespacedName{Name: nodeName}, nrt); err != nil {
-		klog.V(5).ErrorS(err, "Cannot get NodeTopologies from NodeResourceTopologyLister")
+		lh.V(5).Error(err, "Cannot get NodeTopologies from NodeResourceTopologyLister")
 		return nil, true
 	}
 	return nrt, true

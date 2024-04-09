@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 )
 
 // DiscardReserved is intended to solve similiar problem as Overreserve Cache,
@@ -74,7 +75,8 @@ func (pt *DiscardReserved) NodeMaybeOverReserved(nodeName string, pod *corev1.Po
 func (pt *DiscardReserved) NodeHasForeignPods(nodeName string, pod *corev1.Pod)    {}
 
 func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
-	klog.V(5).InfoS("nrtcache NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	lh := logging.Log()
+	lh.V(5).Info("nrtcache NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 	pt.rMutex.Lock()
 	defer pt.rMutex.Unlock()
 
@@ -85,14 +87,16 @@ func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod
 }
 
 func (pt *DiscardReserved) UnreserveNodeResources(nodeName string, pod *corev1.Pod) {
-	klog.V(5).InfoS("nrtcache NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	lh := logging.Log()
+	lh.V(5).Info("nrtcache NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }
 
 // PostBind is invoked to cleanup reservationMap
 func (pt *DiscardReserved) PostBind(nodeName string, pod *corev1.Pod) {
-	klog.V(5).InfoS("nrtcache NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	lh := logging.Log()
+	lh.V(5).Info("nrtcache NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }

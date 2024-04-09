@@ -17,11 +17,14 @@ limitations under the License.
 package cache
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 )
 
@@ -36,10 +39,11 @@ var (
 )
 
 func SetupForeignPodsDetector(schedProfileName string, podInformer k8scache.SharedInformer, cc Interface) {
+	lh := logging.Log()
 	foreignCache := func(obj interface{}) {
 		pod, ok := obj.(*corev1.Pod)
 		if !ok {
-			klog.V(3).InfoS("nrtcache: foreign: unsupported object %T", obj)
+			lh.V(3).Info("nrtcache: foreign: unsupported object", "kind", fmt.Sprintf("%T", obj))
 			return
 		}
 		if !IsForeignPod(pod) {
@@ -47,7 +51,7 @@ func SetupForeignPodsDetector(schedProfileName string, podInformer k8scache.Shar
 		}
 
 		cc.NodeHasForeignPods(pod.Spec.NodeName, pod)
-		klog.V(6).InfoS("nrtcache: has foreign pods", "logID", klog.KObj(pod), "node", pod.Spec.NodeName, "podUID", pod.UID)
+		lh.V(6).Info("nrtcache: has foreign pods", "logID", klog.KObj(pod), "node", pod.Spec.NodeName, "podUID", pod.UID)
 	}
 
 	podInformer.AddEventHandler(k8scache.ResourceEventHandlerFuncs{
@@ -68,10 +72,11 @@ func TrackAllForeignPods() {
 }
 
 func RegisterSchedulerProfileName(schedProfileName string) {
-	klog.InfoS("nrtcache: setting up foreign pod detection", "profile", schedProfileName)
+	lh := logging.Log()
+	lh.Info("nrtcache: setting up foreign pod detection", "profile", schedProfileName)
 	schedProfileNames.Insert(schedProfileName)
 
-	klog.V(5).InfoS("nrtcache: registered scheduler profiles", "names", schedProfileNames.List())
+	lh.V(5).Info("nrtcache: registered scheduler profiles", "names", schedProfileNames.List())
 }
 
 func IsForeignPod(pod *corev1.Pod) bool {
