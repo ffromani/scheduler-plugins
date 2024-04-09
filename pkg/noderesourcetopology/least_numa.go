@@ -28,7 +28,6 @@ import (
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"gonum.org/v1/gonum/stat/combin"
 
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
@@ -51,7 +50,7 @@ func leastNUMAContainerScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1a
 			continue
 		}
 		identifier := fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
-		numaNodes, isMinAvgDistance := numaNodesRequired(identifier, qos, nodes, container.Resources.Requests)
+		numaNodes, isMinAvgDistance := numaNodesRequired(lh, identifier, qos, nodes, container.Resources.Requests)
 		// container's resources can't fit onto node, return MinNodeScore for whole pod
 		if numaNodes == nil {
 			// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
@@ -91,7 +90,7 @@ func leastNUMAPodScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.
 		return framework.MaxNodeScore, nil
 	}
 
-	numaNodes, isMinAvgDistance := numaNodesRequired(identifier, qos, nodes, resources)
+	numaNodes, isMinAvgDistance := numaNodesRequired(lh, identifier, qos, nodes, resources)
 	// pod's resources can't fit onto node, return MinNodeScore
 	if numaNodes == nil {
 		// score plugin should be running after resource filter plugin so we should always find sufficient amount of NUMA nodes
@@ -113,12 +112,12 @@ func normalizeScore(numaNodesCount int, isMinAvgDistance bool) int64 {
 	return score
 }
 
-func minAvgDistanceInCombinations(numaNodes NUMANodeList, numaNodesCombination [][]int) float32 {
+func minAvgDistanceInCombinations(lh logr.Logger, numaNodes NUMANodeList, numaNodesCombination [][]int) float32 {
 	// max distance for NUMA node
 	var minDistance float32 = maxDistanceValue
 
 	for _, combination := range numaNodesCombination {
-		avgDistance := nodesAvgDistance(numaNodes, combination...)
+		avgDistance := nodesAvgDistance(lh, numaNodes, combination...)
 		if avgDistance < minDistance {
 			minDistance = avgDistance
 		}
@@ -127,8 +126,7 @@ func minAvgDistanceInCombinations(numaNodes NUMANodeList, numaNodesCombination [
 	return minDistance
 }
 
-func nodesAvgDistance(numaNodes NUMANodeList, nodes ...int) float32 {
-	lh := logging.Log()
+func nodesAvgDistance(lh logr.Logger, numaNodes NUMANodeList, nodes ...int) float32 {
 	if len(nodes) == 0 {
 		return maxDistanceValue
 	}
@@ -171,10 +169,10 @@ func combineResources(numaNodes NUMANodeList, combination []int) v1.ResourceList
 // numaNodesRequired returns bitmask with minimal NUMA nodes required to run given resources
 // or nil when resources can't be fitted onto the worker node
 // second value returned is a boolean indicating if bitmask is optimal from distance perspective
-func numaNodesRequired(identifier string, qos v1.PodQOSClass, numaNodes NUMANodeList, resources v1.ResourceList) (bitmask.BitMask, bool) {
+func numaNodesRequired(lh logr.Logger, identifier string, qos v1.PodQOSClass, numaNodes NUMANodeList, resources v1.ResourceList) (bitmask.BitMask, bool) {
 	for bitmaskLen := 1; bitmaskLen <= len(numaNodes); bitmaskLen++ {
 		numaNodesCombination := combin.Combinations(len(numaNodes), bitmaskLen)
-		suitableCombination, isMinDistance := findSuitableCombination(identifier, qos, numaNodes, resources, numaNodesCombination)
+		suitableCombination, isMinDistance := findSuitableCombination(lh, identifier, qos, numaNodes, resources, numaNodesCombination)
 		// we have found suitable combination for given bitmaskLen
 		if suitableCombination != nil {
 			bm := bitmask.NewEmptyBitMask()
@@ -191,8 +189,8 @@ func numaNodesRequired(identifier string, qos v1.PodQOSClass, numaNodes NUMANode
 // findSuitableCombination returns combination from numaNodesCombination that can fit resources, otherwise return nil
 // second value returned is a boolean indicating if returned combination is optimal from distance perspective
 // this function will always return combination that provides minimal average distance between nodes in combination
-func findSuitableCombination(identifier string, qos v1.PodQOSClass, numaNodes NUMANodeList, resources v1.ResourceList, numaNodesCombination [][]int) ([]int, bool) {
-	minAvgDistance := minAvgDistanceInCombinations(numaNodes, numaNodesCombination)
+func findSuitableCombination(lh logr.Logger, identifier string, qos v1.PodQOSClass, numaNodes NUMANodeList, resources v1.ResourceList, numaNodesCombination [][]int) ([]int, bool) {
+	minAvgDistance := minAvgDistanceInCombinations(lh, numaNodes, numaNodesCombination)
 	var (
 		minDistanceCombination []int
 		// init as max distance
@@ -203,10 +201,10 @@ func findSuitableCombination(identifier string, qos v1.PodQOSClass, numaNodes NU
 			continue
 		}
 		combinationResources := combineResources(numaNodes, combination)
-		resourcesFit := checkResourcesFit(identifier, qos, resources, combinationResources)
+		resourcesFit := checkResourcesFit(lh, identifier, qos, resources, combinationResources)
 
 		if resourcesFit {
-			distance := nodesAvgDistance(numaNodes, combination...)
+			distance := nodesAvgDistance(lh, numaNodes, combination...)
 			if distance == minAvgDistance {
 				// return early if we can fit resources into combination and provide minDistance
 				return combination, true
@@ -222,8 +220,7 @@ func findSuitableCombination(identifier string, qos v1.PodQOSClass, numaNodes NU
 	return minDistanceCombination, false
 }
 
-func checkResourcesFit(identifier string, qos v1.PodQOSClass, resources v1.ResourceList, combinationResources v1.ResourceList) bool {
-	lh := logging.Log()
+func checkResourcesFit(lh logr.Logger, identifier string, qos v1.PodQOSClass, resources v1.ResourceList, combinationResources v1.ResourceList) bool {
 	for resource, quantity := range resources {
 		if quantity.IsZero() {
 			lh.V(4).Info("ignoring zero-qty resource request", "identifier", identifier, "resource", resource)
