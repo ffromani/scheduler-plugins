@@ -24,6 +24,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager/bitmask"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
+	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"gonum.org/v1/gonum/stat/combin"
 
@@ -36,8 +37,7 @@ const (
 	maxDistanceValue = 255
 )
 
-func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	lh := logging.Log()
+func leastNUMAContainerScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
 	nodes := createNUMANodeList(zones)
 	qos := v1qos.GetPodQOS(pod)
 
@@ -79,8 +79,7 @@ func leastNUMAContainerScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) 
 	return normalizeScore(maxNUMANodesCount, allContainersMinAvgDistance), nil
 }
 
-func leastNUMAPodScopeScore(pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
-	lh := logging.Log()
+func leastNUMAPodScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList) (int64, *framework.Status) {
 	nodes := createNUMANodeList(zones)
 	qos := v1qos.GetPodQOS(pod)
 

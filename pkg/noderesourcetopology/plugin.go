@@ -96,7 +96,7 @@ func subtractFromNUMAs(resources v1.ResourceList, numaNodes NUMANodeList, nodes 
 }
 
 type filterFn func(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status
-type scoringFn func(*v1.Pod, topologyv1alpha2.ZoneList) (int64, *framework.Status)
+type scoringFn func(logr.Logger, *v1.Pod, topologyv1alpha2.ZoneList) (int64, *framework.Status)
 
 // TopologyMatch plugin which run simplified version of TopologyManager's admit handler
 type TopologyMatch struct {
