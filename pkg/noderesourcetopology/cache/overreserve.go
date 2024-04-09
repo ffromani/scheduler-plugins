@@ -207,7 +207,7 @@ func (ov *OverReserve) Resync() {
 	}
 
 	// node -> pod identifier (namespace, name)
-	nodeToObjsMap, err := makeNodeToPodDataMap(ov.podLister, ov.isPodRelevant, logID)
+	nodeToObjsMap, err := makeNodeToPodDataMap(ov.lh, ov.podLister, ov.isPodRelevant, logID)
 	if err != nil {
 		ov.lh.Error(err, "cannot find the mapping between running pods and nodes")
 		return
@@ -280,14 +280,14 @@ func (ov *OverReserve) Store() *nrtStore {
 	return ov.nrts
 }
 
-func makeNodeToPodDataMap(podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc, logID string) (map[string][]podData, error) {
+func makeNodeToPodDataMap(lh logr.Logger, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc, logID string) (map[string][]podData, error) {
 	nodeToObjsMap := make(map[string][]podData)
 	pods, err := podLister.List(labels.Everything())
 	if err != nil {
 		return nodeToObjsMap, err
 	}
 	for _, pod := range pods {
-		if !isPodRelevant(pod, logID) {
+		if !isPodRelevant(lh, pod, logID) {
 			continue
 		}
 		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]

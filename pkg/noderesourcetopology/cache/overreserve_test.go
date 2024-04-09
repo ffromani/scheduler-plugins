@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	podlisterv1 "k8s.io/client-go/listers/core/v1"
+	"k8s.io/klog/v2"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -960,7 +961,7 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				pods: tcase.pods,
 				err:  tcase.err,
 			}
-			got, err := makeNodeToPodDataMap(podLister, tcase.isPodRelevant, tcase.description)
+			got, err := makeNodeToPodDataMap(klog.Background(), podLister, tcase.isPodRelevant, tcase.description)
 			if err != tcase.expectedErr {
 				t.Errorf("error mismatch: got %v expected %v", err, tcase.expectedErr)
 			}

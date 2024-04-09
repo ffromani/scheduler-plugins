@@ -57,7 +57,7 @@ func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, han
 		return nrtcache.NewPassthrough(client), nil
 	}
 
-	podSharedInformer, podLister, isPodRelevant := podprovider.NewFromHandle(handle, tcfg.Cache)
+	podSharedInformer, podLister, isPodRelevant := podprovider.NewFromHandle(lh, handle, tcfg.Cache)
 
 	nrtCache, err := nrtcache.NewOverReserve(tcfg.Cache, client, podLister, isPodRelevant)
 	if err != nil {
