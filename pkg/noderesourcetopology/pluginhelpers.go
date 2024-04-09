@@ -49,16 +49,16 @@ func initNodeTopologyInformer(lh logr.Logger, tcfg *apiconfig.NodeResourceTopolo
 	}
 
 	if tcfg.DiscardReservedNodes {
-		return nrtcache.NewDiscardReserved(lh, client), nil
+		return nrtcache.NewDiscardReserved(lh.WithName("nrtcache"), client), nil
 	}
 
 	if tcfg.CacheResyncPeriodSeconds <= 0 {
-		return nrtcache.NewPassthrough(lh, client), nil
+		return nrtcache.NewPassthrough(lh.WithName("nrtcache"), client), nil
 	}
 
 	podSharedInformer, podLister, isPodRelevant := podprovider.NewFromHandle(lh, handle, tcfg.Cache)
 
-	nrtCache, err := nrtcache.NewOverReserve(lh, tcfg.Cache, client, podLister, isPodRelevant)
+	nrtCache, err := nrtcache.NewOverReserve(lh.WithName("nrtcache"), tcfg.Cache, client, podLister, isPodRelevant)
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func initNodeTopologyForeignPodsDetection(lh logr.Logger, cfg *apiconfig.NodeRes
 	} else {
 		nrtcache.TrackAllForeignPods()
 	}
-	nrtcache.RegisterSchedulerProfileName(lh, profileName)
-	nrtcache.SetupForeignPodsDetector(lh, profileName, podSharedInformer, nrtCache)
+	nrtcache.RegisterSchedulerProfileName(lh.WithName("foreignpods"), profileName)
+	nrtcache.SetupForeignPodsDetector(lh.WithName("foreignpods"), profileName, podSharedInformer, nrtCache)
 }
 
 func createNUMANodeList(lh logr.Logger, zones topologyv1alpha2.ZoneList) NUMANodeList {

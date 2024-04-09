@@ -42,7 +42,7 @@ func SetupForeignPodsDetector(lh logr.Logger, schedProfileName string, podInform
 	foreignCache := func(obj interface{}) {
 		pod, ok := obj.(*corev1.Pod)
 		if !ok {
-			lh.V(3).Info("nrtcache: foreign: unsupported object", "kind", fmt.Sprintf("%T", obj))
+			lh.V(3).Info("unsupported object", "kind", fmt.Sprintf("%T", obj))
 			return
 		}
 		if !IsForeignPod(pod) {
@@ -50,7 +50,7 @@ func SetupForeignPodsDetector(lh logr.Logger, schedProfileName string, podInform
 		}
 
 		cc.NodeHasForeignPods(pod.Spec.NodeName, pod)
-		lh.V(6).Info("nrtcache: has foreign pods", "logID", klog.KObj(pod), "node", pod.Spec.NodeName, "podUID", pod.UID)
+		lh.V(6).Info("detected foreign pods", "logID", klog.KObj(pod), "node", pod.Spec.NodeName, "podUID", pod.UID)
 	}
 
 	podInformer.AddEventHandler(k8scache.ResourceEventHandlerFuncs{
@@ -71,10 +71,10 @@ func TrackAllForeignPods() {
 }
 
 func RegisterSchedulerProfileName(lh logr.Logger, schedProfileName string) {
-	lh.Info("nrtcache: setting up foreign pod detection", "profile", schedProfileName)
+	lh.Info("setting up detection", "profile", schedProfileName)
 	schedProfileNames.Insert(schedProfileName)
 
-	lh.V(5).Info("nrtcache: registered scheduler profiles", "names", schedProfileNames.List())
+	lh.V(5).Info("registered scheduler profiles", "names", schedProfileNames.List())
 }
 
 func IsForeignPod(pod *corev1.Pod) bool {

@@ -77,7 +77,7 @@ func (pt *DiscardReserved) NodeMaybeOverReserved(nodeName string, pod *corev1.Po
 func (pt *DiscardReserved) NodeHasForeignPods(nodeName string, pod *corev1.Pod)    {}
 
 func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
-	pt.lh.V(5).Info("nrtcache NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("NRT Reserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 	pt.rMutex.Lock()
 	defer pt.rMutex.Unlock()
 
@@ -88,14 +88,14 @@ func (pt *DiscardReserved) ReserveNodeResources(nodeName string, pod *corev1.Pod
 }
 
 func (pt *DiscardReserved) UnreserveNodeResources(nodeName string, pod *corev1.Pod) {
-	pt.lh.V(5).Info("nrtcache NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("NRT Unreserve", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }
 
 // PostBind is invoked to cleanup reservationMap
 func (pt *DiscardReserved) PostBind(nodeName string, pod *corev1.Pod) {
-	pt.lh.V(5).Info("nrtcache NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
+	pt.lh.V(5).Info("NRT PostBind", "logID", klog.KObj(pod), "UID", pod.GetUID(), "node", nodeName)
 
 	pt.removeReservationForNode(nodeName, pod)
 }

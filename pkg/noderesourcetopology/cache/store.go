@@ -45,7 +45,7 @@ func newNrtStore(lh logr.Logger, nrts []topologyv1alpha2.NodeResourceTopology) *
 	for _, nrt := range nrts {
 		data[nrt.Name] = nrt.DeepCopy()
 	}
-	lh.V(6).Info("nrtcache: initialized nrtStore", "objects", len(data))
+	lh.V(6).Info("initialized nrtStore", "objects", len(data))
 	return &nrtStore{
 		data: data,
 		lh:   lh,
@@ -62,7 +62,7 @@ func (nrs nrtStore) Contains(nodeName string) bool {
 func (nrs *nrtStore) GetNRTCopyByNodeName(nodeName string) *topologyv1alpha2.NodeResourceTopology {
 	obj, ok := nrs.data[nodeName]
 	if !ok {
-		nrs.lh.V(3).Info("nrtcache: missing cached NodeTopology", "node", nodeName)
+		nrs.lh.V(3).Info("missing cached NodeTopology", "node", nodeName)
 		return nil
 	}
 	return obj.DeepCopy()
@@ -71,7 +71,7 @@ func (nrs *nrtStore) GetNRTCopyByNodeName(nodeName string) *topologyv1alpha2.Nod
 // Update adds or replace the Node Resource Topology associated to a node. Always do a copy.
 func (nrs *nrtStore) Update(nrt *topologyv1alpha2.NodeResourceTopology) {
 	nrs.data[nrt.Name] = nrt.DeepCopy()
-	nrs.lh.V(5).Info("nrtcache: updated cached NodeTopology", "node", nrt.Name)
+	nrs.lh.V(5).Info("updated cached NodeTopology", "node", nrt.Name)
 }
 
 // resourceStore maps the resource requested by pod by pod namespaed name. It is not thread safe and needs to be protected by a lock.
@@ -105,7 +105,7 @@ func (rs *resourceStore) AddPod(pod *corev1.Pod) bool {
 		rs.lh.V(4).Info("updating existing entry", "key", key)
 	}
 	resData := util.GetPodEffectiveRequest(pod)
-	rs.lh.V(5).Info("nrtcache: resourcestore ADD", stringify.ResourceListToLoggable(key, resData)...)
+	rs.lh.V(5).Info("resourcestore ADD", stringify.ResourceListToLoggable(key, resData)...)
 	rs.data[key] = resData
 	return ok
 }
@@ -118,7 +118,7 @@ func (rs *resourceStore) DeletePod(pod *corev1.Pod) bool {
 		// should not happen, so we log with a low level
 		rs.lh.V(4).Info("removing missing entry", "key", key)
 	}
-	rs.lh.V(5).Info("nrtcache: resourcestore DEL", stringify.ResourceListToLoggable(key, rs.data[key])...)
+	rs.lh.V(5).Info("resourcestore DEL", stringify.ResourceListToLoggable(key, rs.data[key])...)
 	delete(rs.data, key)
 	return ok
 }
@@ -146,7 +146,7 @@ func (rs *resourceStore) UpdateNRT(logID string, nrt *topologyv1alpha2.NodeResou
 				if zr.Available.Cmp(qty) < 0 {
 					// this should happen rarely, and it is likely caused by
 					// a bug elsewhere.
-					rs.lh.V(3).Info("nrtcache: cannot decrement resource", "logID", logID, "zone", zr.Name, "node", nrt.Name, "available", zr.Available, "requestor", key, "quantity", qty)
+					rs.lh.V(3).Info("cannot decrement resource", "logID", logID, "zone", zr.Name, "node", nrt.Name, "available", zr.Available, "requestor", key, "quantity", qty)
 					zr.Available = resource.Quantity{}
 					continue
 				}
@@ -239,8 +239,8 @@ func checkPodFingerprintForNode(lh logr.Logger, logID string, objs []podData, no
 	}
 	pfpComputed := pfp.Sign()
 
-	lh.V(5).Info("nrtcache: podset fingerprint check", "logID", logID, "node", nodeName, "expected", pfpExpected, "computed", pfpComputed, "onlyExclusiveResources", onlyExclRes)
-	lh.V(6).Info("nrtcache: podset fingerprint debug", "logID", logID, "node", nodeName, "status", st.Repr())
+	lh.V(5).Info("podset fingerprint check", "logID", logID, "node", nodeName, "expected", pfpExpected, "computed", pfpComputed, "onlyExclusiveResources", onlyExclRes)
+	lh.V(6).Info("podset fingerprint debug", "logID", logID, "node", nodeName, "status", st.Repr())
 
 	err := pfp.Check(pfpExpected)
 	podfingerprint.MarkCompleted(st)
