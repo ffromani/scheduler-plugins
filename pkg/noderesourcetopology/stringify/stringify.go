@@ -17,7 +17,6 @@ limitations under the License.
 package stringify
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,10 +82,21 @@ func NodeResourceTopologyResources(nrtObj *topologyv1alpha2.NodeResourceTopology
 func nrtResourceInfoListToString(resInfoList []topologyv1alpha2.ResourceInfo) string {
 	items := []string{}
 	for _, resInfo := range resInfoList {
-		items = append(items, fmt.Sprintf("%s=%s/%s/%s", resInfo.Name, resInfo.Capacity.String(), resInfo.Allocatable.String(), resInfo.Available.String()))
+		items = append(items, nrtResourceInfo(resInfo))
 	}
 	return strings.Join(items, ",")
 }
+
+func nrtResourceInfo(resInfo topologyv1alpha2.ResourceInfo) string {
+	capVal, _ := resInfo.Capacity.AsInt64()
+	allocVal, _ := resInfo.Allocatable.AsInt64()
+	availVal, _ := resInfo.Available.AsInt64()
+	if !needsHumanization(resInfo.Name) {
+		return resInfo.Name + "=" + strconv.FormatInt(capVal, 10) + "/" + strconv.FormatInt(allocVal, 10) + "/" + strconv.FormatInt(availVal, 10)
+	}
+	return resInfo.Name + "=" + humanize.IBytes(uint64(capVal)) + "/" + humanize.IBytes(uint64(allocVal)) + "/" + humanize.IBytes(uint64(availVal))
+}
+
 func needsHumanization(resName string) bool {
 	// memory-related resources may be expressed in KiB/Bytes, which makes
 	// for long numbers, harder to read and compare. To make it easier for
