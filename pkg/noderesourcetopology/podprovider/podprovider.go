@@ -43,13 +43,13 @@ func NewFromHandle(lh logr.Logger, handle framework.Handle, cacheConf *apiconfig
 	podInformer := coreinformers.NewFilteredPodInformer(handle.ClientSet(), metav1.NamespaceAll, 0, cache.Indexers{}, nil)
 	podLister := podlisterv1.NewPodLister(podInformer.GetIndexer())
 
-	lh.V(5).Info("Start custom pod informer")
+	lh.V(5).Info("start custom pod informer")
 	ctx := context.Background()
 	go podInformer.Run(ctx.Done())
 
-	lh.V(5).Info("Syncing custom pod informer")
+	lh.V(5).Info("syncing custom pod informer")
 	cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced)
-	lh.V(5).Info("Synced custom pod informer")
+	lh.V(5).Info("synced custom pod informer")
 
 	return podInformer, podLister, IsPodRelevantDedicated
 }
@@ -69,12 +69,12 @@ func IsPodRelevantDedicated(lh logr.Logger, pod *corev1.Pod) bool {
 	// Note PodUnknown is deprecated and reportedly no longer set since 2015 (!!)
 	if pod.Status.Phase == corev1.PodPending {
 		// this is unexpected, so we're loud about it
-		lh.V(2).Info("nrtcache: Listed pod in Pending phase, ignored", "podUID", pod.GetUID())
+		lh.V(2).Info("listed pod in Pending phase, ignored", "podUID", pod.GetUID())
 		return false
 	}
 	if pod.Spec.NodeName == "" {
 		// this is very unexpected, so we're louder about it
-		lh.Info("nrtcache: Listed pod unbound, ignored", "podUID", pod.GetUID())
+		lh.Info("listed pod unbound, ignored", "podUID", pod.GetUID())
 		return false
 	}
 	return true
