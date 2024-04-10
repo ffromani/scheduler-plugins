@@ -59,7 +59,7 @@ func (rw resourceToWeightMap) weight(r v1.ResourceName) int64 {
 }
 
 func (tm *TopologyMatch) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
-	lh := logging.Log().WithValues("logID", logging.PodLogID(pod), "podUID", pod.UID, "node", nodeName)
+	lh := logging.Log().WithValues("logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", nodeName)
 
 	lh.V(6).Info("scoring node")
 	// if it's a non-guaranteed pod, every node is considered to be a good fit

@@ -69,12 +69,12 @@ func IsPodRelevantDedicated(lh logr.Logger, pod *corev1.Pod, logID string) bool 
 	// Note PodUnknown is deprecated and reportedly no longer set since 2015 (!!)
 	if pod.Status.Phase == corev1.PodPending {
 		// this is unexpected, so we're loud about it
-		lh.V(2).Info("nrtcache: Listed pod in Pending phase, ignored", "logID", logID, "podUID", pod.UID)
+		lh.V(2).Info("nrtcache: Listed pod in Pending phase, ignored", "logID", logID, "podUID", pod.GetUID())
 		return false
 	}
 	if pod.Spec.NodeName == "" {
 		// this is very unexpected, so we're louder about it
-		lh.Info("nrtcache: Listed pod unbound, ignored", "logID", logID, "podUID", pod.UID)
+		lh.Info("nrtcache: Listed pod unbound, ignored", "logID", logID, "podUID", pod.GetUID())
 		return false
 	}
 	return true

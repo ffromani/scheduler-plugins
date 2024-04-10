@@ -202,7 +202,7 @@ func (tm *TopologyMatch) Filter(ctx context.Context, cycleState *framework.Cycle
 
 	nodeName := nodeInfo.Node().Name
 
-	lh := logging.Log().WithValues("logID", logging.PodLogID(pod), "podUID", pod.UID, "node", nodeName)
+	lh := logging.Log().WithValues("logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", nodeName)
 
 	nodeTopology, ok := tm.nrtCache.GetCachedNRTCopy(ctx, nodeName, pod)
 	if !ok {
