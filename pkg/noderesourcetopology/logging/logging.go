@@ -17,13 +17,9 @@ limitations under the License.
 package logging
 
 import (
-	"encoding/json"
-
 	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
-
-	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 )
 
 // before to replace with FromContext(), at least in filter and score,
@@ -43,19 +39,4 @@ func Log() logr.Logger {
 
 func PodLogID(pod *corev1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
-}
-
-func NRT(desc string, nrtObj *topologyv1alpha2.NodeResourceTopology) {
-	lh := Log()
-	if !lh.V(6).Enabled() {
-		// avoid the expensive marshal operation
-		return
-	}
-
-	ntrJson, err := json.MarshalIndent(nrtObj, "", " ")
-	if err != nil {
-		lh.V(6).Error(err, "failed to marshal noderesourcetopology object")
-		return
-	}
-	lh.V(6).Info(desc, "noderesourcetopology", string(ntrJson))
 }

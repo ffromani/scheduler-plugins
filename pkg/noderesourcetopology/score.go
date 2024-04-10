@@ -31,6 +31,7 @@ import (
 	"github.com/go-logr/logr"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
@@ -77,7 +78,7 @@ func (tm *TopologyMatch) Score(ctx context.Context, state *framework.CycleState,
 		return 0, nil
 	}
 
-	logging.NRT("noderesourcetopology found", nodeTopology)
+	lh.V(6).Info("found object", "noderesourcetopology", stringify.NodeResourceTopologyResources(nodeTopology))
 
 	handler := tm.scoringHandlerFromTopologyManagerConfig(topologyManagerConfigFromNodeResourceTopology(nodeTopology))
 	if handler == nil {
