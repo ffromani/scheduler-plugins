@@ -58,8 +58,9 @@ func (rw resourceToWeightMap) weight(r v1.ResourceName) int64 {
 }
 
 func (tm *TopologyMatch) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
-	lh := logging.Log()
-	lh.V(6).Info("scoring node", "nodeName", nodeName)
+	lh := logging.Log().WithValues("logID", logging.PodLogID(pod), "podUID", pod.UID, "node", nodeName)
+
+	lh.V(6).Info("scoring node")
 	// if it's a non-guaranteed pod, every node is considered to be a good fit
 	if v1qos.GetPodQOS(pod) != v1.PodQOSGuaranteed {
 		return framework.MaxNodeScore, nil
@@ -68,11 +69,11 @@ func (tm *TopologyMatch) Score(ctx context.Context, state *framework.CycleState,
 	nodeTopology, ok := tm.nrtCache.GetCachedNRTCopy(ctx, nodeName, pod)
 
 	if !ok {
-		lh.V(4).Info("noderesourcetopology is not valid for node", "node", nodeName)
+		lh.V(4).Info("noderesourcetopology is not valid for node")
 		return 0, nil
 	}
 	if nodeTopology == nil {
-		lh.V(5).Info("noderesourcetopology was not found for node", "node", nodeName)
+		lh.V(5).Info("noderesourcetopology was not found for node")
 		return 0, nil
 	}
 
@@ -102,7 +103,7 @@ func scoreForEachNUMANode(lh logr.Logger, requested v1.ResourceList, numaList NU
 			minScore = numaScore
 		}
 		numaScores[numa.NUMAID] = numaScore
-		lh.V(6).Info("numa score result", "numaID", numa.NUMAID, "score", numaScore)
+		lh.V(6).Info("numa score result", "numaCell", numa.NUMAID, "score", numaScore)
 	}
 	return minScore
 }
@@ -143,9 +144,8 @@ func containerScopeScore(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.Zon
 	allocatablePerNUMA := createNUMANodeList(lh, zones)
 
 	for i, container := range containers {
-		identifier := fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
 		contScore[i] = float64(scoreForEachNUMANode(lh, container.Resources.Requests, allocatablePerNUMA, scorerFn, resourceToWeightMap))
-		lh.V(6).Info("container scope scoring", "container", identifier, "score", contScore[i])
+		lh.V(6).Info("container scope scoring", "container", container.Name, "score", contScore[i])
 	}
 	finalScore := int64(stat.Mean(contScore, nil))
 	lh.V(5).Info("container scope scoring final node score", "finalScore", finalScore)

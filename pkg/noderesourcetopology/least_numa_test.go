@@ -684,7 +684,7 @@ func TestNUMANodesRequired(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			bm, isMinDistance := numaNodesRequired(klog.Background(), "test", v1.PodQOSGuaranteed, tc.numaNodes, tc.podResources)
+			bm, isMinDistance := numaNodesRequired(klog.Background(), v1.PodQOSGuaranteed, tc.numaNodes, tc.podResources)
 
 			if bm != nil && !bm.IsEqual(tc.expectedBitmask) {
 				t.Errorf("wrong bitmask expected: %d got: %d", tc.expectedBitmask, bm)
