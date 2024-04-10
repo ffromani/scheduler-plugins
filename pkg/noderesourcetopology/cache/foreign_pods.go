@@ -23,8 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8scache "k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 )
 
@@ -50,7 +50,7 @@ func SetupForeignPodsDetector(lh logr.Logger, schedProfileName string, podInform
 		}
 
 		cc.NodeHasForeignPods(pod.Spec.NodeName, pod)
-		lh.V(6).Info("detected foreign pods", "logID", klog.KObj(pod), "node", pod.Spec.NodeName, "podUID", pod.GetUID())
+		lh.V(6).Info("detected foreign pods", "logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", pod.Spec.NodeName)
 	}
 
 	podInformer.AddEventHandler(k8scache.ResourceEventHandlerFuncs{

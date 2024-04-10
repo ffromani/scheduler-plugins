@@ -17,6 +17,9 @@ limitations under the License.
 package logging
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
@@ -38,5 +41,15 @@ func Log() logr.Logger {
 }
 
 func PodLogID(pod *corev1.Pod) string {
+	if pod == nil {
+		return "<nil>"
+	}
+	if pod.Namespace == "" {
+		return pod.Name
+	}
 	return pod.Namespace + "/" + pod.Name
+}
+
+func TimeLogID() string {
+	return fmt.Sprintf("uts/%v", time.Now().UnixMilli())
 }
