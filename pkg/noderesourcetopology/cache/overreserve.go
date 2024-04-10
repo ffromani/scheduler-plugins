@@ -163,7 +163,7 @@ func (ov *OverReserve) UnreserveNodeResources(nodeName string, pod *corev1.Pod) 
 // 2. it was pessimistically overallocated, so the node is a candidate for resync
 // This function enables the caller to know the slice of nodes should be considered for resync,
 // avoiding the need to rescan the full node list.
-func (ov *OverReserve) NodesMaybeOverReserved(logID string) []string {
+func (ov *OverReserve) NodesMaybeOverReserved(lh logr.Logger) []string {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	// this is intentionally aggressive. We don't yet make any attempt to find out if the
@@ -180,7 +180,7 @@ func (ov *OverReserve) NodesMaybeOverReserved(logID string) []string {
 	}
 
 	if nodes.Len() > 0 {
-		ov.lh.V(4).Info("found dirty nodes", "logID", logID, "foreign", foreignCount, "discarded", nodes.Len()-foreignCount, "total", nodes.Len())
+		lh.V(4).Info("found dirty nodes", "foreign", foreignCount, "discarded", nodes.Len()-foreignCount, "total", nodes.Len())
 	}
 	return nodes.Keys()
 }
@@ -197,75 +197,77 @@ func (ov *OverReserve) Resync() {
 	// we are not working with a specific pod, so we need a unique key to track this flow
 	logID := logIDFromTime()
 
-	nodeNames := ov.NodesMaybeOverReserved(logID)
+	nodeNames := ov.NodesMaybeOverReserved(lh)
 	// avoid as much as we can unnecessary work and logs.
 	if len(nodeNames) == 0 {
-		ov.lh.V(6).Info("resync: no dirty nodes detected")
+		lh.V(6).Info("no dirty nodes detected")
 		return
 	}
 
 	// node -> pod identifier (namespace, name)
 	nodeToObjsMap, err := makeNodeToPodDataMap(ov.lh, ov.podLister, ov.isPodRelevant, logID)
 	if err != nil {
-		ov.lh.Error(err, "cannot find the mapping between running pods and nodes")
+		lh.Error(err, "cannot find the mapping between running pods and nodes")
 		return
 	}
 
-	ov.lh.V(6).Info("resync NodeTopology cache starting", "logID", logID)
-	defer ov.lh.V(6).Info("resync NodeTopology cache complete", "logID", logID)
+	lh.V(6).Info("resync NodeTopology cache starting")
+	defer lh.V(6).Info("resync NodeTopology cache complete")
 
 	var nrtUpdates []*topologyv1alpha2.NodeResourceTopology
 	for _, nodeName := range nodeNames {
+		lh := ov.lh.WithValues("logID", logID, "node", nodeName)
+
 		nrtCandidate := &topologyv1alpha2.NodeResourceTopology{}
 		if err := ov.client.Get(context.Background(), types.NamespacedName{Name: nodeName}, nrtCandidate); err != nil {
-			ov.lh.V(3).Info("failed to get NodeTopology", "logID", logID, "node", nodeName, "error", err)
+			lh.V(3).Info("failed to get NodeTopology", "error", err)
 			continue
 		}
 		if nrtCandidate == nil {
-			ov.lh.V(3).Info("missing NodeTopology", "logID", logID, "node", nodeName)
+			lh.V(3).Info("missing NodeTopology")
 			continue
 		}
 
 		objs, ok := nodeToObjsMap[nodeName]
 		if !ok {
 			// this really should never happen
-			ov.lh.V(3).Info("cannot find any pod for node", "logID", logID, "node", nodeName)
+			lh.V(3).Info("cannot find any pod for node")
 			continue
 		}
 
 		pfpExpected, onlyExclRes := podFingerprintForNodeTopology(nrtCandidate, ov.resyncMethod)
 		if pfpExpected == "" {
-			ov.lh.V(3).Info("missing NodeTopology podset fingerprint data", "logID", logID, "node", nodeName)
+			lh.V(3).Info("missing NodeTopology podset fingerprint data")
 			continue
 		}
 
-		ov.lh.V(6).Info("trying to resync NodeTopology", "logID", logID, "node", nodeName, "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
+		lh.V(6).Info("trying to resync NodeTopology", "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
 
-		err = checkPodFingerprintForNode(ov.lh, logID, objs, nodeName, pfpExpected, onlyExclRes)
+		err = checkPodFingerprintForNode(lh, objs, nodeName, pfpExpected, onlyExclRes)
 		if errors.Is(err, podfingerprint.ErrSignatureMismatch) {
 			// can happen, not critical
-			ov.lh.V(5).Info("NodeTopology podset fingerprint mismatch", "logID", logID, "node", nodeName)
+			lh.V(5).Info("NodeTopology podset fingerprint mismatch")
 			continue
 		}
 		if err != nil {
 			// should never happen, let's be vocal
-			ov.lh.V(3).Error(err, "checking NodeTopology podset fingerprint", "logID", logID, "node", nodeName)
+			lh.V(3).Error(err, "checking NodeTopology podset fingerprint")
 			continue
 		}
 
-		ov.lh.V(4).Info("overriding cached info", "logID", logID, "node", nodeName)
+		lh.V(4).Info("overriding cached info")
 		nrtUpdates = append(nrtUpdates, nrtCandidate)
 	}
 
-	ov.FlushNodes(logID, nrtUpdates...)
+	ov.FlushNodes(lh, nrtUpdates...)
 }
 
 // FlushNodes drops all the cached information about a given node, resetting its state clean.
-func (ov *OverReserve) FlushNodes(logID string, nrts ...*topologyv1alpha2.NodeResourceTopology) {
+func (ov *OverReserve) FlushNodes(lh logr.Logger, nrts ...*topologyv1alpha2.NodeResourceTopology) {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	for _, nrt := range nrts {
-		ov.lh.V(4).Info("flushing", "logID", logID, "node", nrt.Name)
+		lh.V(4).Info("flushing", "node", nrt.Name)
 		ov.nrts.Update(nrt)
 		delete(ov.assumedResources, nrt.Name)
 		ov.nodesMaybeOverreserved.Delete(nrt.Name)

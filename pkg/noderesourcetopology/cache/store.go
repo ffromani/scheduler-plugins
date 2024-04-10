@@ -146,7 +146,7 @@ func (rs *resourceStore) UpdateNRT(logID string, nrt *topologyv1alpha2.NodeResou
 				if zr.Available.Cmp(qty) < 0 {
 					// this should happen rarely, and it is likely caused by
 					// a bug elsewhere.
-					rs.lh.V(3).Info("cannot decrement resource", "logID", logID, "zone", zr.Name, "node", nrt.Name, "available", zr.Available, "requestor", key, "quantity", qty)
+					rs.lh.V(3).Info("cannot decrement resource", "logID", logID, "zone", zr.Name, "node", nrt.Name, "available", zr.Available, "requestor", key, "quantity", qty.String())
 					zr.Available = resource.Quantity{}
 					continue
 				}
@@ -228,7 +228,7 @@ type podData struct {
 // checkPodFingerprintForNode verifies if the given pods fingeprint (usually from NRT update) matches the
 // computed one using the stored data about pods running on nodes. Returns nil on success, or an error
 // describing the failure
-func checkPodFingerprintForNode(lh logr.Logger, logID string, objs []podData, nodeName, pfpExpected string, onlyExclRes bool) error {
+func checkPodFingerprintForNode(lh logr.Logger, objs []podData, nodeName, pfpExpected string, onlyExclRes bool) error {
 	st := podfingerprint.MakeStatus(nodeName)
 	pfp := podfingerprint.NewTracingFingerprint(len(objs), &st)
 	for _, obj := range objs {
@@ -239,8 +239,8 @@ func checkPodFingerprintForNode(lh logr.Logger, logID string, objs []podData, no
 	}
 	pfpComputed := pfp.Sign()
 
-	lh.V(5).Info("podset fingerprint check", "logID", logID, "node", nodeName, "expected", pfpExpected, "computed", pfpComputed, "onlyExclusiveResources", onlyExclRes)
-	lh.V(6).Info("podset fingerprint debug", "logID", logID, "node", nodeName, "status", st.Repr())
+	lh.V(5).Info("podset fingerprint check", "expected", pfpExpected, "computed", pfpComputed, "onlyExclusiveResources", onlyExclRes)
+	lh.V(6).Info("podset fingerprint debug", "status", st.Repr())
 
 	err := pfp.Check(pfpExpected)
 	podfingerprint.MarkCompleted(st)
