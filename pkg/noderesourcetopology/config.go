@@ -82,7 +82,6 @@ func updateTopologyManagerConfigFromAttributes(conf *TopologyManagerConfig, attr
 
 func updateTopologyManagerConfigFromTopologyPolicies(conf *TopologyManagerConfig, nodeName string, topologyPolicies []string) {
 	if len(topologyPolicies) == 0 {
-		klog.V(3).InfoS("Cannot determine policy", "node", nodeName)
 		return
 	}
 	if len(topologyPolicies) > 1 {
