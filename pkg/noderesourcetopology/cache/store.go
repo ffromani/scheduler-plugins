@@ -98,27 +98,27 @@ func (rs *resourceStore) String() string {
 
 // AddPod returns true if updating existing pod, false if adding for the first time
 func (rs *resourceStore) AddPod(pod *corev1.Pod) bool {
-	key := pod.Namespace + "/" + pod.Name // this is also a valid logID
+	key := pod.Namespace + "/" + pod.Name
 	_, ok := rs.data[key]
 	if ok {
 		// should not happen, so we log with a low level
 		rs.lh.V(4).Info("updating existing entry", "key", key)
 	}
 	resData := util.GetPodEffectiveRequest(pod)
-	rs.lh.V(5).Info("resourcestore ADD", stringify.ResourceListToLoggable(key, resData)...)
+	rs.lh.V(5).Info("resourcestore ADD", stringify.ResourceListToLoggable(resData)...)
 	rs.data[key] = resData
 	return ok
 }
 
 // DeletePod returns true if deleted an existing pod, false otherwise
 func (rs *resourceStore) DeletePod(pod *corev1.Pod) bool {
-	key := pod.Namespace + "/" + pod.Name // this is also a valid logID
+	key := pod.Namespace + "/" + pod.Name
 	_, ok := rs.data[key]
 	if ok {
 		// should not happen, so we log with a low level
 		rs.lh.V(4).Info("removing missing entry", "key", key)
 	}
-	rs.lh.V(5).Info("resourcestore DEL", stringify.ResourceListToLoggable(key, rs.data[key])...)
+	rs.lh.V(5).Info("resourcestore DEL", stringify.ResourceListToLoggable(rs.data[key])...)
 	delete(rs.data, key)
 	return ok
 }

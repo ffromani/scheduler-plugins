@@ -17,7 +17,6 @@ limitations under the License.
 package noderesourcetopology
 
 import (
-	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -116,7 +115,8 @@ func createNUMANodeList(lh logr.Logger, zones topologyv1alpha2.ZoneList) NUMANod
 		numaIDToZoneIDx[numaID] = i
 
 		resources := extractResources(zone)
-		lh.V(6).Info("extracted NUMA resources", stringify.ResourceListToLoggable(zone.Name, resources)...)
+		numaItems := []interface{}{"numaCell", numaID}
+		lh.V(6).Info("extracted NUMA resources", stringify.ResourceListToLoggableWithValues(numaItems, resources)...)
 		nodes = append(nodes, NUMANode{NUMAID: numaID, Resources: resources})
 	}
 
@@ -180,7 +180,7 @@ func getForeignPodsDetectMode(lh logr.Logger, cfg *apiconfig.NodeResourceTopolog
 
 func logNumaNodes(lh logr.Logger, desc, nodeName string, nodes NUMANodeList) {
 	for _, numaNode := range nodes {
-		numaLogKey := fmt.Sprintf("%s/node-%d", nodeName, numaNode.NUMAID)
-		lh.V(6).Info(desc, stringify.ResourceListToLoggable(numaLogKey, numaNode.Resources)...)
+		numaItems := []interface{}{"numaCell", numaNode.NUMAID}
+		lh.V(6).Info(desc, stringify.ResourceListToLoggableWithValues(numaItems, numaNode.Resources)...)
 	}
 }

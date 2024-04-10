@@ -21,6 +21,8 @@ import (
 
 	"github.com/go-logr/logr"
 
+	corev1 "k8s.io/api/core/v1"
+
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 )
 
@@ -37,6 +39,10 @@ func SetLogger(lh logr.Logger) {
 
 func Log() logr.Logger {
 	return logh
+}
+
+func PodLogID(pod *corev1.Pod) string {
+	return pod.Namespace + "/" + pod.Name
 }
 
 func NRT(desc string, nrtObj *topologyv1alpha2.NodeResourceTopology) {

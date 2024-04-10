@@ -27,11 +27,14 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
+	"github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2/helper/numanode"
 )
 
-func ResourceListToLoggable(logID string, resources corev1.ResourceList) []interface{} {
-	items := []interface{}{"logID", logID}
+func ResourceListToLoggable(resources corev1.ResourceList) []interface{} {
+	return ResourceListToLoggableWithValues([]interface{}{}, resources)
+}
 
+func ResourceListToLoggableWithValues(items []interface{}, resources corev1.ResourceList) []interface{} {
 	resNames := []string{}
 	for resName := range resources {
 		resNames = append(resNames, string(resName))
@@ -74,6 +77,12 @@ func ResourceList(resources corev1.ResourceList) string {
 func NodeResourceTopologyResources(nrtObj *topologyv1alpha2.NodeResourceTopology) string {
 	zones := []string{}
 	for _, zoneInfo := range nrtObj.Zones {
+		numaItems := []interface{}{"numaCell"}
+		if numaID, err := numanode.NameToID(zoneInfo.Name); err == nil {
+			numaItems = append(numaItems, numaID)
+		} else {
+			numaItems = append(numaItems, zoneInfo.Name)
+		}
 		zones = append(zones, zoneInfo.Name+"=<"+nrtResourceInfoListToString(zoneInfo.Resources)+">")
 	}
 	return nrtObj.Name + "={" + strings.Join(zones, ",") + "}"
