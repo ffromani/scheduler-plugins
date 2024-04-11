@@ -68,7 +68,7 @@ func NewOverReserve(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, cl
 		return nil, err
 	}
 
-	lh.V(3).Info("initializing", "objects", len(nrtObjs.Items), "method", resyncMethod)
+	lh.V(3).Info("initializing", "noderesourcetopologies", len(nrtObjs.Items), "method", resyncMethod)
 	obj := &OverReserve{
 		lh:                     lh,
 		client:                 client,
@@ -100,12 +100,12 @@ func (ov *OverReserve) GetCachedNRTCopy(ctx context.Context, nodeName string, po
 	}
 
 	logID := logging.PodLogID(pod)
-	lh := ov.lh.WithValues("logID", logID, "node", nodeName)
+	lh := ov.lh.WithValues("logID", logID, "podUID", pod.GetUID(), "node", nodeName)
 
-	lh.V(6).Info("NRT", "vanilla", stringify.NodeResourceTopologyResources(nrt))
+	lh.V(6).Info("NRT", "fromcache", stringify.NodeResourceTopologyResources(nrt))
 	nodeAssumedResources.UpdateNRT(logID, nrt)
 
-	lh.V(5).Info("NRT", "updated", stringify.NodeResourceTopologyResources(nrt))
+	lh.V(5).Info("NRT", "withassumed", stringify.NodeResourceTopologyResources(nrt))
 	return nrt, true
 }
 
@@ -117,7 +117,7 @@ func (ov *OverReserve) NodeMaybeOverReserved(nodeName string, pod *corev1.Pod) {
 }
 
 func (ov *OverReserve) NodeHasForeignPods(nodeName string, pod *corev1.Pod) {
-	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	if !ov.nrts.Contains(nodeName) {
@@ -129,7 +129,7 @@ func (ov *OverReserve) NodeHasForeignPods(nodeName string, pod *corev1.Pod) {
 }
 
 func (ov *OverReserve) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
-	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	nodeAssumedResources, ok := ov.assumedResources[nodeName]
@@ -146,7 +146,7 @@ func (ov *OverReserve) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
 }
 
 func (ov *OverReserve) UnreserveNodeResources(nodeName string, pod *corev1.Pod) {
-	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "podUID", pod.GetUID(), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	nodeAssumedResources, ok := ov.assumedResources[nodeName]
