@@ -31,7 +31,7 @@ import (
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 )
 
-type PodFilterFunc func(lh logr.Logger, pod *corev1.Pod, logID string) bool
+type PodFilterFunc func(lh logr.Logger, pod *corev1.Pod) bool
 
 func NewFromHandle(lh logr.Logger, handle framework.Handle, cacheConf *apiconfig.NodeResourceTopologyCache) (k8scache.SharedIndexInformer, podlisterv1.PodLister, PodFilterFunc) {
 	dedicated := wantsDedicatedInformer(cacheConf)
@@ -55,26 +55,26 @@ func NewFromHandle(lh logr.Logger, handle framework.Handle, cacheConf *apiconfig
 }
 
 // IsPodRelevantAlways is meant to be used in test only
-func IsPodRelevantAlways(lh logr.Logger, pod *corev1.Pod, logID string) bool {
+func IsPodRelevantAlways(lh logr.Logger, pod *corev1.Pod) bool {
 	return true
 }
 
-func IsPodRelevantShared(lh logr.Logger, pod *corev1.Pod, logID string) bool {
+func IsPodRelevantShared(lh logr.Logger, pod *corev1.Pod) bool {
 	// we are interested only about nodes which consume resources
 	return pod.Status.Phase == corev1.PodRunning
 }
 
-func IsPodRelevantDedicated(lh logr.Logger, pod *corev1.Pod, logID string) bool {
+func IsPodRelevantDedicated(lh logr.Logger, pod *corev1.Pod) bool {
 	// Every other phase we're interested into (see https://github.com/kubernetes-sigs/scheduler-plugins/pull/599).
 	// Note PodUnknown is deprecated and reportedly no longer set since 2015 (!!)
 	if pod.Status.Phase == corev1.PodPending {
 		// this is unexpected, so we're loud about it
-		lh.V(2).Info("nrtcache: Listed pod in Pending phase, ignored", "logID", logID, "podUID", pod.GetUID())
+		lh.V(2).Info("nrtcache: Listed pod in Pending phase, ignored", "podUID", pod.GetUID())
 		return false
 	}
 	if pod.Spec.NodeName == "" {
 		// this is very unexpected, so we're louder about it
-		lh.Info("nrtcache: Listed pod unbound, ignored", "logID", logID, "podUID", pod.GetUID())
+		lh.Info("nrtcache: Listed pod unbound, ignored", "podUID", pod.GetUID())
 		return false
 	}
 	return true
