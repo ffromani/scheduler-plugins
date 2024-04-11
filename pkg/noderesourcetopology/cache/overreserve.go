@@ -200,7 +200,7 @@ func (ov *OverReserve) NodesMaybeOverReserved(lh logr.Logger) []string {
 // too aggressive resync attempts, so to more, likely unnecessary, computation work on the scheduler side.
 func (ov *OverReserve) Resync() {
 	// we are not working with a specific pod, so we need a unique key to track this flow
-	lh := ov.lh.WithValues("logID", logging.TimeLogID())
+	lh := ov.lh.WithName("resync").WithValues("logID", logging.TimeLogID())
 
 	nodeNames := ov.NodesMaybeOverReserved(lh)
 	// avoid as much as we can unnecessary work and logs.
@@ -246,7 +246,7 @@ func (ov *OverReserve) Resync() {
 			continue
 		}
 
-		lh.V(6).Info("trying to resync NodeTopology", "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
+		lh.V(6).Info("trying to sync NodeTopology", "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
 
 		err = checkPodFingerprintForNode(lh, objs, nodeName, pfpExpected, onlyExclRes)
 		if errors.Is(err, podfingerprint.ErrSignatureMismatch) {
