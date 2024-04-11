@@ -41,10 +41,10 @@ func NewPassthrough(lh logr.Logger, client ctrlclient.Client) Interface {
 }
 
 func (pt Passthrough) GetCachedNRTCopy(ctx context.Context, nodeName string, _ *corev1.Pod) (*topologyv1alpha2.NodeResourceTopology, bool) {
-	pt.lh.V(5).Info("Lister for nodeResTopoPlugin")
+	pt.lh.V(5).Info("lister for NRT plugin")
 	nrt := &topologyv1alpha2.NodeResourceTopology{}
 	if err := pt.client.Get(ctx, types.NamespacedName{Name: nodeName}, nrt); err != nil {
-		pt.lh.V(5).Error(err, "Cannot get NodeTopologies from NodeResourceTopologyLister")
+		pt.lh.V(5).Error(err, "cannot get nrts from lister")
 		return nil, true
 	}
 	return nrt, true

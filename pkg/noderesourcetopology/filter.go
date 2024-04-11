@@ -21,7 +21,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/klog/v2"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	kubeletconfig "k8s.io/kubernetes/pkg/kubelet/apis/config"
@@ -43,7 +42,7 @@ const highestNUMAID = 8
 type PolicyHandler func(pod *v1.Pod, zoneMap topologyv1alpha2.ZoneList) *framework.Status
 
 func singleNUMAContainerLevelHandler(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
-	lh.V(5).Info("Single NUMA node handler")
+	lh.V(5).Info("container level single NUMA node handler")
 
 	// prepare NUMANodes list from zoneMap
 	nodes := createNUMANodeList(lh, zones)
@@ -174,7 +173,7 @@ func isResourceSetSuitable(qos v1.PodQOSClass, resource v1.ResourceName, quantit
 }
 
 func singleNUMAPodLevelHandler(lh logr.Logger, pod *v1.Pod, zones topologyv1alpha2.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status {
-	lh.V(5).Info("Pod Level Resource handler")
+	lh.V(5).Info("pod level single NUMA node handler")
 
 	resources := util.GetPodEffectiveRequest(pod)
 
@@ -213,7 +212,7 @@ func (tm *TopologyMatch) Filter(ctx context.Context, cycleState *framework.Cycle
 		return nil
 	}
 
-	lh.V(5).Info("Found NodeResourceTopology", "nodeTopology", klog.KObj(nodeTopology))
+	lh.V(5).Info("found nrt data", "object", stringify.NodeResourceTopologyResources(nodeTopology))
 
 	handler := filterHandlerFromTopologyManagerConfig(topologyManagerConfigFromNodeResourceTopology(nodeTopology))
 	if handler == nil {

@@ -86,12 +86,12 @@ func updateTopologyManagerConfigFromTopologyPolicies(conf *TopologyManagerConfig
 		return
 	}
 	if len(topologyPolicies) > 1 {
-		lh.V(4).Info("Ignoring extra policies", "node", nodeName, "policies count", len(topologyPolicies)-1)
+		lh.V(4).Info("ignoring extra policies", "node", nodeName, "policies count", len(topologyPolicies)-1)
 	}
 
 	policyName := topologyv1alpha2.TopologyManagerPolicy(topologyPolicies[0])
-	lh.Info("The `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
-	lh.Info("The `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
+	lh.Info("the `topologyPolicies` field is deprecated and will be removed with the NRT API v1beta1.")
+	lh.Info("the `topologyPolicies` field is deprecated, please use top-level Attributes field instead.")
 
 	switch policyName {
 	case topologyv1alpha2.SingleNUMANodePodLevel:

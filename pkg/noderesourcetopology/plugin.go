@@ -123,7 +123,7 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 	lh := klog.Background()
 	logging.SetLogger(lh)
 
-	lh.V(5).Info("Creating new TopologyMatch plugin")
+	lh.V(5).Info("creating new noderesourcetopology plugin")
 	tcfg, ok := args.(*apiconfig.NodeResourceTopologyMatchArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NodeResourceTopologyMatchArgs, got %T", args)
@@ -135,7 +135,7 @@ func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error)
 
 	nrtCache, err := initNodeTopologyInformer(lh, tcfg, handle)
 	if err != nil {
-		lh.Error(err, "Cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
+		lh.Error(err, "cannot create clientset for NodeTopologyResource", "kubeConfig", handle.KubeConfig())
 		return nil, err
 	}
 
