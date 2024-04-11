@@ -113,23 +113,23 @@ func (ov *OverReserve) NodeMaybeOverReserved(nodeName string, pod *corev1.Pod) {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	val := ov.nodesMaybeOverreserved.Incr(nodeName)
-	ov.lh.V(4).Info("mark discarded", "logID", logID, "node", nodeName, "count", val)
+	ov.lh.V(4).Info("mark discarded", "node", nodeName, "count", val)
 }
 
 func (ov *OverReserve) NodeHasForeignPods(nodeName string, pod *corev1.Pod) {
-	logID := logging.PodLogID(pod)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	if !ov.nrts.Contains(nodeName) {
-		ov.lh.V(5).Info("ignoring foreign pods", "logID", logID, "node", nodeName, "nrtinfo", "missing")
+		lh.V(5).Info("ignoring foreign pods", "nrtinfo", "missing")
 		return
 	}
 	val := ov.nodesWithForeignPods.Incr(nodeName)
-	ov.lh.V(4).Info("marked with foreign pods", "logID", logID, "node", nodeName, "count", val)
+	lh.V(4).Info("marked with foreign pods", "count", val)
 }
 
 func (ov *OverReserve) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
-	logID := logging.PodLogID(pod)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	nodeAssumedResources, ok := ov.assumedResources[nodeName]
@@ -139,26 +139,26 @@ func (ov *OverReserve) ReserveNodeResources(nodeName string, pod *corev1.Pod) {
 	}
 
 	nodeAssumedResources.AddPod(pod)
-	ov.lh.V(5).Info("post reserve", "logID", logID, "node", nodeName, "assumedResources", nodeAssumedResources.String())
+	lh.V(5).Info("post reserve", "assumedResources", nodeAssumedResources.String())
 
 	ov.nodesMaybeOverreserved.Delete(nodeName)
-	ov.lh.V(6).Info("reset discard counter", logID, "node", nodeName)
+	lh.V(6).Info("reset discard counter")
 }
 
 func (ov *OverReserve) UnreserveNodeResources(nodeName string, pod *corev1.Pod) {
-	logID := logging.PodLogID(pod)
+	lh := ov.lh.WithValues("logID", logging.PodLogID(pod), "node", nodeName)
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	nodeAssumedResources, ok := ov.assumedResources[nodeName]
 	if !ok {
 		// this should not happen, so we're vocal about it
 		// we don't return error because not much to do to recover anyway
-		ov.lh.V(3).Info("no resources tracked", "logID", logID, "node", nodeName)
+		lh.V(3).Info("no resources tracked")
 		return
 	}
 
 	nodeAssumedResources.DeletePod(pod)
-	ov.lh.V(5).Info("post release", "logID", logID, "node", nodeName, "assumedResources", nodeAssumedResources.String())
+	lh.V(5).Info("post release", "assumedResources", nodeAssumedResources.String())
 }
 
 // NodesMaybeOverReserved returns a slice of all the node names which have been discarded previously,
@@ -200,7 +200,7 @@ func (ov *OverReserve) NodesMaybeOverReserved(lh logr.Logger) []string {
 // too aggressive resync attempts, so to more, likely unnecessary, computation work on the scheduler side.
 func (ov *OverReserve) Resync() {
 	// we are not working with a specific pod, so we need a unique key to track this flow
-	logID := logging.TimeLogID()
+	lh := ov.lh.WithValues("logID", logging.TimeLogID())
 
 	nodeNames := ov.NodesMaybeOverReserved(lh)
 	// avoid as much as we can unnecessary work and logs.
@@ -210,7 +210,7 @@ func (ov *OverReserve) Resync() {
 	}
 
 	// node -> pod identifier (namespace, name)
-	nodeToObjsMap, err := makeNodeToPodDataMap(ov.lh, ov.podLister, ov.isPodRelevant, logID)
+	nodeToObjsMap, err := makeNodeToPodDataMap(lh, ov.podLister, ov.isPodRelevant)
 	if err != nil {
 		lh.Error(err, "cannot find the mapping between running pods and nodes")
 		return
@@ -221,7 +221,7 @@ func (ov *OverReserve) Resync() {
 
 	var nrtUpdates []*topologyv1alpha2.NodeResourceTopology
 	for _, nodeName := range nodeNames {
-		lh := ov.lh.WithValues("logID", logID, "node", nodeName)
+		lh = lh.WithValues("node", nodeName)
 
 		nrtCandidate := &topologyv1alpha2.NodeResourceTopology{}
 		if err := ov.client.Get(context.Background(), types.NamespacedName{Name: nodeName}, nrtCandidate); err != nil {
@@ -285,14 +285,14 @@ func (ov *OverReserve) Store() *nrtStore {
 	return ov.nrts
 }
 
-func makeNodeToPodDataMap(lh logr.Logger, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc, logID string) (map[string][]podData, error) {
+func makeNodeToPodDataMap(lh logr.Logger, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (map[string][]podData, error) {
 	nodeToObjsMap := make(map[string][]podData)
 	pods, err := podLister.List(labels.Everything())
 	if err != nil {
 		return nodeToObjsMap, err
 	}
 	for _, pod := range pods {
-		if !isPodRelevant(lh, pod, logID) {
+		if !isPodRelevant(lh, pod) {
 			continue
 		}
 		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
