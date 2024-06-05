@@ -631,6 +631,9 @@ func TestTopologyCachePluginWithoutUpdates(t *testing.T) {
 	}
 }
 
+// testcase: NRT start with scope=pod. Multicontainer pod. Not enough resource in any NUMA zone to accomodate with scope=pod.
+// update NRT to set scope=container. No other change. Now the pod can fit. Schedule the pod. Observe success.
+
 func TestTopologyCachePluginWithUpdates(t *testing.T) {
 
 	os.Args = []string{"unused", "-logtostderr", "-v", schedVerbose}
