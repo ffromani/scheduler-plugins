@@ -208,10 +208,10 @@ type NodeResourceTopologyCache struct {
 	// Has no effect if caching is disabled (CacheResyncPeriod is zero) or if DiscardReservedNodes
 	// is enabled. "Autodetect" is the default, reads hint from NRT objects. Fallback is "All".
 	ResyncMethod *CacheResyncMethod
-	// InformerMode controls the channel the cache uses to get updates about pods.
+	// *DEPRECATED* InformerMode controls the channel the cache uses to get updates about pods.
 	// "Shared" uses the default settings; "Dedicated" creates a specific subscription which is
 	// guaranteed to best suit the cache needs, at cost of one extra connection.
-	// If unspecified, default is "Dedicated"
+	// If unspecified, default is "Shared"
 	InformerMode *CacheInformerMode
 	// ResyncScope controls which changes the resync logic monitors to trigger an update.
 	// "All" consider both Attributes (metadata, node config details) and per-NUMA resources,

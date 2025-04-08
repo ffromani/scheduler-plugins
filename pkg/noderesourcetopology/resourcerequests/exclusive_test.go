@@ -260,5 +260,139 @@ func coreTestCases() []testCase {
 			expectedNonNative: false,
 			expectedExclusive: false,
 		},
+		{
+			name: "single-container-gu-millis",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "cnt",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("1000m"),
+									corev1.ResourceMemory: resource.MustParse("2G"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("1000m"),
+									corev1.ResourceMemory: resource.MustParse("2G"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedNonNative: false,
+			expectedExclusive: true,
+		},
+		{
+			name: "single-container-millis-cpu-only",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "cnt",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU: resource.MustParse("1000m"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU: resource.MustParse("1000m"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedNonNative: false,
+			expectedExclusive: false,
+		},
+		{
+			name: "single-container-gu-fract",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "cnt",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("150m"),
+									corev1.ResourceMemory: resource.MustParse("200M"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("150m"),
+									corev1.ResourceMemory: resource.MustParse("200M"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedNonNative: false,
+			expectedExclusive: false,
+		},
+		{
+			name: "single-container-fract-cpu-only",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "cnt",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU: resource.MustParse("150m"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU: resource.MustParse("150m"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedNonNative: false,
+			expectedExclusive: false,
+		},
+		{
+			name: "single-container-mem-only",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "cnt",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("512M"),
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceMemory: resource.MustParse("512M"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedNonNative: false,
+			expectedExclusive: false,
+		},
 	}
 }

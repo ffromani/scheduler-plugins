@@ -44,6 +44,7 @@ func NewFromHandle(lh logr.Logger, handle framework.Handle, cacheConf *apiconfig
 	podInformer := coreinformers.NewFilteredPodInformer(handle.ClientSet(), metav1.NamespaceAll, 0, cache.Indexers{}, nil)
 	podLister := podlisterv1.NewPodLister(podInformer.GetIndexer())
 
+	lh.V(2).Info("custom pod informer is DEPRECATED - please review your configuration")
 	lh.V(5).Info("start custom pod informer")
 	ctx := context.Background()
 	go podInformer.Run(ctx.Done())

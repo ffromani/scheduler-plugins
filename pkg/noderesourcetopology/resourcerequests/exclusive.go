@@ -42,7 +42,7 @@ func IncludeNonNative(pod *corev1.Pod) bool {
 }
 func AreExclusiveForPod(pod *corev1.Pod) bool {
 	qos := v1qos.GetPodQOS(pod)
-	return areExclusiveForAnyContainer(qos, append(pod.Spec.InitContainers, pod.Spec.Containers...))
+	return areExclusiveForAnyContainer(qos, pod.Spec.Containers) || areExclusiveForAnyContainer(qos, pod.Spec.InitContainers)
 }
 
 func areExclusiveForAnyContainer(qos corev1.PodQOSClass, containers []corev1.Container) bool {
