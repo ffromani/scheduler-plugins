@@ -70,6 +70,7 @@ type scoringFn func(logr.Logger, *v1.Pod, *scoreInfo) (int64, *fwk.Status)
 
 // TopologyMatch plugin which run simplified version of TopologyManager's admit handler
 type TopologyMatch struct {
+	fh                  framework.Handle
 	logger              klog.Logger
 	resourceToWeightMap resourceToWeightMap
 	nrtCache            nrtcache.Interface
@@ -78,6 +79,8 @@ type TopologyMatch struct {
 }
 
 var _ framework.FilterPlugin = &TopologyMatch{}
+var _ framework.PreFilterPlugin = &TopologyMatch{}
+var _ framework.PostFilterPlugin = &TopologyMatch{}
 var _ framework.ReservePlugin = &TopologyMatch{}
 var _ framework.ScorePlugin = &TopologyMatch{}
 var _ framework.EnqueueExtensions = &TopologyMatch{}
@@ -124,6 +127,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	}
 
 	topologyMatch := &TopologyMatch{
+		fh:                  handle,
 		logger:              lh,
 		resourceToWeightMap: resToWeightMap,
 		nrtCache:            nrtCache,
