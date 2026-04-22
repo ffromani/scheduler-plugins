@@ -36,9 +36,17 @@ import (
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/logging"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/nodeconfig"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/podprovider"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
+)
+
+const (
+	// defaultMaxNRTUpdates is the watcher update channel size initial heuristic, no hard data.
+	// we used a bounded channel to prevent excessive event accumulation. The watcher code
+	// is now in charge to detect and handle overflow using retries.
+	defaultMaxNRTUpdates = 128
 )
 
 type OverReserve struct {
@@ -58,6 +66,7 @@ type OverReserve struct {
 	resyncMethod           apiconfig.CacheResyncMethod
 	resyncScope            apiconfig.CacheResyncScope
 	isPodRelevant          podprovider.PodFilterFunc
+	nrtUpdateCh            chan string
 }
 
 func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.WithWatch, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
@@ -83,6 +92,7 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 		nodesMaybeOverreserved: newCounter(),
 		nodesWithForeignPods:   newCounter(),
 		nodesWithAttrUpdate:    newCounter(),
+		nrtUpdateCh:            make(chan string, defaultMaxNRTUpdates),
 		podLister:              podLister,
 		resyncMethod:           resyncMethod,
 		isPodRelevant:          isPodRelevant,
@@ -90,9 +100,9 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 
 	if resyncScope == apiconfig.CacheResyncScopeAll {
 		wt := Watcher{
-			lh:    obj.lh,
-			nrts:  obj.nrts,
-			nodes: obj.nodesWithAttrUpdate,
+			lh:       obj.lh,
+			eventCh:  obj.nrtUpdateCh,
+			lastConf: make(map[string]nodeconfig.TopologyManager),
 		}
 		go wt.NodeResourceTopologies(ctx, client)
 	}
@@ -181,6 +191,8 @@ func (ov *OverReserve) UnreserveNodeResources(nodeName string, pod *corev1.Pod) 
 	lh.V(2).Info("post unreserve", logging.KeyNode, nodeName, "assumedResources", nodeAssumedResources.String())
 }
 
+func (ov *OverReserve) PostBind(nodeName string, pod *corev1.Pod) {}
+
 type DesyncedNodes struct {
 	Generation        uint64
 	MaybeOverReserved []string
@@ -259,6 +271,8 @@ func (ov *OverReserve) Resync() {
 	lh_ := ov.lh.WithName(logging.FlowCacheSync)
 	lh_.V(4).Info(logging.FlowBegin)
 	defer lh_.V(4).Info(logging.FlowEnd)
+
+	ov.drainNRTEvents(lh_)
 
 	nodes := ov.GetDesyncedNodes(lh_)
 	// we start without because chicken/egg problem. This is the earliest we can use the generation value.
@@ -426,4 +440,24 @@ func getCacheResyncScope(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCach
 	return resyncScope
 }
 
-func (ov *OverReserve) PostBind(nodeName string, pod *corev1.Pod) {}
+// drainNRTEvents processes node names received from the watcher goroutine via
+// the nrtUpdateCh channel. The watcher only sends a name when it detects a new
+// NRT or a topology manager attribute change, so every name received here needs
+// to be queued into nodesWithAttrUpdate for processing by the ConfigChanged path.
+func (ov *OverReserve) drainNRTEvents(lh logr.Logger) {
+	ov.lock.Lock()
+	defer ov.lock.Unlock()
+	queued := 0
+	for {
+		select {
+		case nodeName := <-ov.nrtUpdateCh:
+			ov.nodesWithAttrUpdate.Incr(nodeName)
+			queued++
+		default:
+			if queued > 0 {
+				lh.V(4).Info("drained NRT events", "queued", queued)
+			}
+			return
+		}
+	}
+}
