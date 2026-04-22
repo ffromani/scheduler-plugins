@@ -67,6 +67,9 @@ type OverReserve struct {
 	resyncScope            apiconfig.CacheResyncScope
 	isPodRelevant          podprovider.PodFilterFunc
 	nrtUpdateCh            chan string
+	watchCancel            context.CancelFunc
+	watchWG                sync.WaitGroup
+	closeOnce              sync.Once
 }
 
 func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.WithWatch, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
@@ -83,6 +86,7 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 	resyncScope := getCacheResyncScope(lh, cfg)
 
 	lh.V(2).Info("initializing", "noderesourcetopologies", len(nrtObjs.Items), "method", resyncMethod, "scope", resyncScope)
+	watcherCtx, watchCancel := context.WithCancel(ctx)
 	obj := &OverReserve{
 		lh:                     lh,
 		client:                 client,
@@ -96,6 +100,7 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 		podLister:              podLister,
 		resyncMethod:           resyncMethod,
 		isPodRelevant:          isPodRelevant,
+		watchCancel:            watchCancel,
 	}
 
 	if resyncScope == apiconfig.CacheResyncScopeAll {
@@ -104,7 +109,11 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 			eventCh:  obj.nrtUpdateCh,
 			lastConf: make(map[string]nodeconfig.TopologyManager),
 		}
-		go wt.NodeResourceTopologies(ctx, client)
+		obj.watchWG.Add(1)
+		go func() {
+			defer obj.watchWG.Done()
+			wt.NodeResourceTopologies(watcherCtx, client)
+		}()
 	}
 
 	return obj, nil
@@ -192,6 +201,18 @@ func (ov *OverReserve) UnreserveNodeResources(nodeName string, pod *corev1.Pod) 
 }
 
 func (ov *OverReserve) PostBind(nodeName string, pod *corev1.Pod) {}
+
+// Close is safe to call multiple times and concurrently: sync.Once
+// guarantees the shutdown sequence runs exactly once and it is then idempotent
+func (ov *OverReserve) Close() {
+	ov.closeOnce.Do(ov.closeCache)
+}
+
+// closeCache is not just close to avoid clashes with builtins
+func (ov *OverReserve) closeCache() {
+	ov.watchCancel()
+	ov.watchWG.Wait()
+}
 
 type DesyncedNodes struct {
 	Generation        uint64
