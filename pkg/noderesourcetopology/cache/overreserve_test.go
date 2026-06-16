@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
+	"github.com/k8stopologyawareschedwg/numaplacement"
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 
 	corev1 "k8s.io/api/core/v1"
@@ -1099,8 +1100,9 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 			expected: map[string][]podData{
 				"node1": {
 					{
-						Namespace: "namespace1",
-						Name:      "pod1",
+						Namespace:                        "namespace1",
+						Name:                             "pod1",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 				},
 			},
@@ -1125,8 +1127,9 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 			expected: map[string][]podData{
 				"node1": {
 					{
-						Namespace: "namespace1",
-						Name:      "pod1",
+						Namespace:                        "namespace1",
+						Name:                             "pod1",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 				},
 			},
@@ -1189,8 +1192,9 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 			expected: map[string][]podData{
 				"node1": {
 					{
-						Namespace: "namespace1",
-						Name:      "pod1",
+						Namespace:                        "namespace1",
+						Name:                             "pod1",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 				},
 			},
@@ -1215,8 +1219,9 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 			expected: map[string][]podData{
 				"node1": {
 					{
-						Namespace: "namespace1",
-						Name:      "pod1",
+						Namespace:                        "namespace1",
+						Name:                             "pod1",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 				},
 			},
@@ -1265,16 +1270,19 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 			expected: map[string][]podData{
 				"node1": {
 					{
-						Namespace: "namespace1",
-						Name:      "pod1",
+						Namespace:                        "namespace1",
+						Name:                             "pod1",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 					{
-						Namespace: "namespace2",
-						Name:      "pod2",
+						Namespace:                        "namespace2",
+						Name:                             "pod2",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 					{
-						Namespace: "namespace2",
-						Name:      "pod3",
+						Namespace:                        "namespace2",
+						Name:                             "pod3",
+						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
 					},
 				},
 			},
