@@ -416,10 +416,8 @@ func podFingerprintForNodeTopology(nrt *topologyv1alpha2.NodeResourceTopology, m
 }
 
 type podData struct {
-	Namespace string
-	Name      string
-	// TODO: remove this field and use ContainersWithExclusiveResources instead
-	HasExclusiveResources            bool
+	Namespace                        string
+	Name                             string
 	ContainersWithExclusiveResources []numaplacement.ContainerID
 }
 
@@ -430,7 +428,7 @@ func checkPodFingerprintForNode(lh logr.Logger, objs []podData, nodeName, pfpExp
 	st := podfingerprint.MakeStatus(nodeName)
 	pfp := podfingerprint.NewTracingFingerprint(len(objs), &st)
 	for _, obj := range objs {
-		if onlyExclRes && !obj.HasExclusiveResources {
+		if onlyExclRes && len(obj.ContainersWithExclusiveResources) == 0 {
 			continue
 		}
 		pfp.Add(obj.Namespace, obj.Name)
