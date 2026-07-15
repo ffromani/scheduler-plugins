@@ -828,7 +828,7 @@ func TestResyncReserveInterleaved(t *testing.T) {
 
 	// NRT on the API server has a fingerprint that does NOT match
 	// the pods in the lister, forcing a fingerprint mismatch in
-	// MakeNRTUpdatesForNodes (resync cannot flush).
+	// MakeNRTUpdates (resync cannot flush).
 	nrtWithBadFingerprint := &topologyv1alpha2.NodeResourceTopology{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
@@ -874,13 +874,13 @@ func TestResyncReserveInterleaved(t *testing.T) {
 	// The fingerprint mismatch means nrtUpdates will be empty for node1.
 	lh := testr.New(t)
 	nodes := nrtCache.GetDesyncedNodes(lh)
-	nrtUpdates := nrtCache.MakeNRTUpdatesForNodes(ctx, lh, nodes)
+	nrtUpdates := nrtCache.MakeNRTUpdates(ctx, lh, nodes)
 
 	if len(nrtUpdates) != 0 {
 		t.Fatalf("expected no NRT updates due to fingerprint mismatch, got %d", len(nrtUpdates))
 	}
 
-	// Step 3: concurrent Reserve() arrives between MakeNRTUpdatesForNodes
+	// Step 3: concurrent Reserve() arrives between MakeNRTUpdates
 	// and FlushNodes — the exact window where the race occurred.
 	concurrentPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
