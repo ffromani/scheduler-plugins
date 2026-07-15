@@ -62,6 +62,7 @@ type OverReserve struct {
 	nodesMaybeOverreserved counter
 	nodesWithForeignPods   counter
 	nodesWithAttrUpdate    counter
+	nodesNewlyAdded        counter
 	podLister              podlisterv1.PodLister
 	resyncMethod           apiconfig.CacheResyncMethod
 	resyncScope            apiconfig.CacheResyncScope
@@ -96,6 +97,7 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 		nodesMaybeOverreserved: newCounter(),
 		nodesWithForeignPods:   newCounter(),
 		nodesWithAttrUpdate:    newCounter(),
+		nodesNewlyAdded:        newCounter(),
 		nrtUpdateCh:            make(chan NRTEvent, defaultMaxNRTUpdates),
 		podLister:              podLister,
 		resyncMethod:           resyncMethod,
@@ -218,14 +220,15 @@ type DesyncedNodes struct {
 	Generation        uint64
 	MaybeOverReserved []string
 	ConfigChanged     []string
+	NewlyAdded        []string
 }
 
 func (rn DesyncedNodes) String() string {
-	return fmt.Sprintf("desyncedNodes{MaybeOverReserved: %v, ConfigChanged: %v}", rn.MaybeOverReserved, rn.ConfigChanged)
+	return fmt.Sprintf("desyncedNodes{MaybeOverReserved: %v, AttrUpdated: %v, NewlyAdded: %v}@%d", rn.MaybeOverReserved, rn.ConfigChanged, rn.NewlyAdded, rn.Generation)
 }
 
 func (rn DesyncedNodes) Len() int {
-	return len(rn.MaybeOverReserved) + len(rn.ConfigChanged)
+	return len(rn.MaybeOverReserved) + len(rn.ConfigChanged) + len(rn.NewlyAdded)
 }
 
 func (rn DesyncedNodes) DirtyCount() int {
@@ -269,6 +272,8 @@ func (ov *OverReserve) GetDesyncedNodes(lh logr.Logger) DesyncedNodes {
 	configChangeNodes := ov.nodesWithAttrUpdate.Clone()
 	configChangeCount := configChangeNodes.Len()
 
+	newlyAddedNodes := ov.nodesNewlyAdded.Clone()
+
 	if nodes.Len() > 0 {
 		lh.V(4).Info("found dirty nodes", "foreign", foreignCount, "discarded", overreservedCount, "configChange", configChangeCount, "total", nodes.Len())
 	}
@@ -276,6 +281,7 @@ func (ov *OverReserve) GetDesyncedNodes(lh logr.Logger) DesyncedNodes {
 		Generation:        ov.generation,
 		MaybeOverReserved: nodes.Keys(),
 		ConfigChanged:     configChangeNodes.Keys(),
+		NewlyAdded:        newlyAddedNodes.Keys(),
 	}
 }
 
@@ -357,6 +363,9 @@ func (ov *OverReserve) MakeNRTUpdates(ctx context.Context, lh_ logr.Logger, node
 	if part := ov.makeNRTUpdatesForNodes(ctx, lh_, ov.client, nodes.ConfigChanged, "configChanged", alwaysPass); len(part) > 0 {
 		nrtUpdates = append(nrtUpdates, part...)
 	}
+	if part := ov.makeNRTUpdatesForNodes(ctx, lh_, ov.client, nodes.NewlyAdded, "newlyAdded", alwaysPass); len(part) > 0 {
+		nrtUpdates = append(nrtUpdates, part...)
+	}
 
 	return nrtUpdates
 }
@@ -400,6 +409,7 @@ func (ov *OverReserve) FlushNodes(lh logr.Logger, nrts ...*topologyv1alpha2.Node
 		ov.nodesMaybeOverreserved.Delete(nrt.Name)
 		ov.nodesWithForeignPods.Delete(nrt.Name)
 		ov.nodesWithAttrUpdate.Delete(nrt.Name)
+		ov.nodesNewlyAdded.Delete(nrt.Name)
 	}
 
 	if len(nrts) == 0 {
@@ -487,6 +497,9 @@ func (ov *OverReserve) processNRTEvent(nrtEv NRTEvent, lh logr.Logger) int {
 	switch nrtEv.Reason {
 	case WatchReasonAttrChanged:
 		ov.nodesWithAttrUpdate.Incr(nrtEv.NodeName)
+		return 1
+	case WatchReasonNewlyAdded:
+		ov.nodesNewlyAdded.Incr(nrtEv.NodeName)
 		return 1
 	}
 	lh.V(2).Info("unsupported NRT event", "reason", nrtEv.Reason.String(), logging.KeyNode, nrtEv.NodeName)
