@@ -31,6 +31,29 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/nodeconfig"
 )
 
+type WatchReason int
+
+const (
+	WatchReasonNone WatchReason = iota
+	WatchReasonAttrChanged
+	WatchReasonNewlyAdded
+)
+
+type NRTEvent struct {
+	Reason   WatchReason
+	NodeName string
+}
+
+func (wr WatchReason) String() string {
+	switch wr {
+	case WatchReasonAttrChanged:
+		return "attribute change"
+	case WatchReasonNewlyAdded:
+		return "newly added"
+	}
+	return "none"
+}
+
 // Watcher forwards node names to a channel when it detects NRT events that
 // require action by the Resync loop. The resync loop is the only component
 // which modifies the counters and act upon that. This model has a clearer,
@@ -40,7 +63,7 @@ import (
 // the updates it sends back to the Resync goroutine.
 type Watcher struct {
 	lh       logr.Logger
-	eventCh  chan<- string
+	eventCh  chan<- NRTEvent
 	lastConf map[string]nodeconfig.TopologyManager
 }
 
@@ -77,7 +100,7 @@ func (wt Watcher) processEvent(ev watch.Event) {
 	// Modified is trivially verified; Added can happen if we
 	// happen to run the scheduler before node update agents,
 	// so turns out not so uncommon.
-	if ev.Type != watch.Modified {
+	if ev.Type != watch.Added && ev.Type != watch.Modified {
 		return
 	}
 	nrtObj, ok := ev.Object.(*topologyv1alpha2.NodeResourceTopology)
@@ -87,17 +110,30 @@ func (wt Watcher) processEvent(ev watch.Event) {
 
 	newConf := nodeconfig.TopologyManagerFromNodeResourceTopology(wt.lh, nrtObj)
 
-	oldConf := wt.lastConf[nrtObj.Name]
-	if oldConf.Equal(newConf) {
-		return
+	oldConf, known := wt.lastConf[nrtObj.Name]
+
+	reason := WatchReasonNone
+	if !known {
+		reason = WatchReasonNewlyAdded
+	} else if !oldConf.Equal(newConf) {
+		reason = WatchReasonAttrChanged
+	}
+
+	if reason == WatchReasonNone {
+		return // nothing to do
+	}
+
+	nrtEv := NRTEvent{
+		Reason:   reason,
+		NodeName: nrtObj.Name,
 	}
 
 	select {
-	case wt.eventCh <- nrtObj.Name:
+	case wt.eventCh <- nrtEv:
 		// Update lastConf only after a successful send; so, if the channel is
 		// full, the next update will retry automatically another send.
 		wt.lastConf[nrtObj.Name] = newConf
-		wt.lh.V(2).Info("attribute change", logging.KeyNode, nrtObj.Name)
+		wt.lh.V(2).Info("NRT async update", "reason", reason.String(), logging.KeyNode, nrtObj.Name)
 	default:
 		wt.lh.V(2).Info("NRT event channel full, will retry", logging.KeyNode, nrtObj.Name)
 	}
