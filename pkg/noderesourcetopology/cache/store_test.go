@@ -383,7 +383,7 @@ func TestNRTStoreUpdate(t *testing.T) {
 			"none",
 		},
 	}
-	ns.Update(nrt3)
+	ns.Update(nrtUpdate{nrt: nrt3})
 	nrt3.TopologyPolicies[0] = "best-effort"
 
 	obj3 := ns.GetNRTCopyByNodeName("node-2")
@@ -438,14 +438,14 @@ func TestNRTStoreUpdateWithPods(t *testing.T) {
 	cnt2 := numaplacement.ContainerID{Namespace: "ns-0", PodName: "pod-1", ContainerName: "container-2"}
 	pods := []podData{
 		{
-			Namespace:                        "ns-0",
-			Name:                             "pod-0",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{cnt0},
+			Namespace:        "ns-0",
+			Name:             "pod-0",
+			PinnedContainers: []string{cnt0.ContainerName},
 		},
 		{
-			Namespace:                        "ns-0",
-			Name:                             "pod-1",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{cnt1, cnt2},
+			Namespace:        "ns-0",
+			Name:             "pod-1",
+			PinnedContainers: []string{cnt1.ContainerName, cnt2.ContainerName},
 		},
 		{
 			Namespace: "ns-1",
@@ -454,7 +454,7 @@ func TestNRTStoreUpdateWithPods(t *testing.T) {
 	}
 
 	ns := newNrtStore(klog.Background(), []topologyv1alpha2.NodeResourceTopology{*nrt})
-	ns.Update(nrt, pods...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	updatedNUMAPlacement := ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if updatedNUMAPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -494,7 +494,7 @@ func TestNRTStoreUpdateWithPods(t *testing.T) {
 	nrt.Attributes[0].Value = "npv0v001::ve=leb89::cc=2::nn=2::bn=1"
 	// mimick removing cnt0 from the node hence removing the vector attribute for that NUMA
 	nrt.Zones[0].Attributes = []topologyv1alpha2.AttributeInfo{}
-	ns.Update(nrt, pods...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	updatedNUMAPlacement = ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if updatedNUMAPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -525,22 +525,19 @@ func TestNRTStoreUpdateWithPods(t *testing.T) {
 // to the first GetNUMAPlacementInfoByNodeName call and the result is cached: a second
 // call returns the identical pointer without re-running the decode.
 func TestNRTStoreLazyDecodeCaching(t *testing.T) {
-	podData := []podData{
+	pods := []podData{
 		{
-			Namespace: "ns-0", Name: "pod-0",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-0", ContainerName: "container-0"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-0",
+			PinnedContainers: []string{"container-0"},
 		},
 		{
-			Namespace: "ns-0", Name: "pod-1",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-1", ContainerName: "container-1"},
-				{Namespace: "ns-0", PodName: "pod-1", ContainerName: "container-2"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-1",
+			PinnedContainers: []string{"container-1", "container-2"},
 		},
 	}
-	// this nrt matches podData
+	// this nrt matches pods
 	nrt := &topologyv1alpha2.NodeResourceTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "node-lazy-test"},
 		Attributes: []topologyv1alpha2.AttributeInfo{
@@ -566,7 +563,7 @@ func TestNRTStoreLazyDecodeCaching(t *testing.T) {
 	}
 
 	ns := newNrtStore(klog.Background(), nil)
-	ns.Update(nrt, podData...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 
 	// Verify that the entry has not been decoded yet
 	entry, ok := ns.data[nrt.Name]
@@ -594,7 +591,7 @@ func TestNRTStoreLazyDecodeCaching(t *testing.T) {
 	}
 
 	// Update invalidates the memo: a fresh Update must clear numaPlacement.
-	ns.Update(nrt, podData...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	entry = ns.data[nrt.Name]
 	if entry.numaPlacement != nil {
 		t.Fatal("numaPlacement should be nil after a new Update (memo invalidated)")
@@ -619,7 +616,7 @@ func TestNRTStoreUpdateWithoutPods(t *testing.T) {
 	}
 
 	ns := newNrtStore(klog.Background(), []topologyv1alpha2.NodeResourceTopology{*nrt})
-	ns.Update(nrt) // no pods
+	ns.Update(nrtUpdate{nrt: nrt}) // no pods
 	numaPlacement := ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if numaPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -643,16 +640,14 @@ func TestNRTStoreUpdateNoNUMAPlacementDueToPolicy(t *testing.T) {
 	}
 	pods := []podData{
 		{
-			Namespace: "ns-0",
-			Name:      "pod-0",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-0", ContainerName: "container-0"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-0",
+			PinnedContainers: []string{"container-0"},
 		},
 	}
 
 	ns := newNrtStore(klog.Background(), []topologyv1alpha2.NodeResourceTopology{*nrt})
-	ns.Update(nrt, pods...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	numaPlacement := ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if numaPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -677,16 +672,14 @@ func TestNRTStoreUpdateNoNUMAPlacementDueToMissingMetadata(t *testing.T) {
 	}
 	pods := []podData{
 		{
-			Namespace: "ns-0",
-			Name:      "pod-0",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-0", ContainerName: "container-0"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-0",
+			PinnedContainers: []string{"container-0"},
 		},
 	}
 
 	ns := newNrtStore(klog.Background(), []topologyv1alpha2.NodeResourceTopology{*nrt})
-	ns.Update(nrt, pods...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	numaPlacement := ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if numaPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -714,25 +707,20 @@ func TestNRTStoreUpdateNoNUMAPlacementDueToInconsistentContainersCount(t *testin
 	}
 	pods := []podData{
 		{
-			Namespace: "ns-0",
-			Name:      "pod-0",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-0", ContainerName: "container-0"},
-				{Namespace: "ns-0", PodName: "pod-0", ContainerName: "container-1"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-0",
+			PinnedContainers: []string{"container-0", "container-1"},
 		},
 		{
-			Namespace: "ns-0",
-			Name:      "pod-1",
-			ContainersWithExclusiveResources: []numaplacement.ContainerID{
-				{Namespace: "ns-0", PodName: "pod-1", ContainerName: "container-0"},
-			},
+			Namespace:        "ns-0",
+			Name:             "pod-1",
+			PinnedContainers: []string{"container-0"},
 		},
 		// 3 exclusive containers total
 	}
 
 	ns := newNrtStore(klog.Background(), []topologyv1alpha2.NodeResourceTopology{*nrt})
-	ns.Update(nrt, pods...)
+	ns.Update(nrtUpdate{nrt: nrt, pods: pods})
 	numaPlacement := ns.GetNUMAPlacementInfoByNodeName(nrt.Name)
 	if numaPlacement == nil {
 		t.Fatalf("missing NUMAPlacement info after update")
@@ -1104,5 +1092,22 @@ func (fpl *fakePodLister) List(lh logr.Logger, selector labels.Selector) ([]*cor
 		}
 	}
 	return ret, fpl.err
+}
+
+func (fpl *fakePodLister) ListByNode(lh logr.Logger, nodeName string) ([]*corev1.Pod, error) {
+	if fpl.err != nil {
+		return nil, fpl.err
+	}
+	var ret []*corev1.Pod
+	for _, pod := range fpl.pods {
+		if pod.Spec.NodeName != nodeName {
+			continue
+		}
+		if fpl.filter != nil && !fpl.filter(lh, pod) {
+			continue
+		}
+		ret = append(ret, pod)
+	}
+	return ret, nil
 }
 

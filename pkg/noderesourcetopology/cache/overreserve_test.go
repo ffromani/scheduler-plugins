@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
-	"github.com/k8stopologyawareschedwg/numaplacement"
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 
 	corev1 "k8s.io/api/core/v1"
@@ -488,7 +487,7 @@ func TestFlush(t *testing.T) {
 	lh := testr.New(t)
 
 	expectedGen := nrtCache.generation + 1
-	gen1 := nrtCache.FlushNodes(lh, map[string][]podData{}, expectedNodeTopology.DeepCopy())
+	gen1 := nrtCache.FlushNodes(lh, nrtUpdate{nrt: expectedNodeTopology.DeepCopy()})
 	if gen1 != expectedGen {
 		t.Fatalf("generation is expected to increase once after flushing a dirty node\ngot %d expected %d", gen1, expectedGen)
 	}
@@ -512,7 +511,7 @@ func TestFlush(t *testing.T) {
 	}
 
 	// flush again without dirty nodes
-	gen2 := nrtCache.FlushNodes(lh, map[string][]podData{})
+	gen2 := nrtCache.FlushNodes(lh)
 	if gen2 != expectedGen {
 		t.Fatalf("generation shouldn't change with no dirty nodes\ngot %d expected %d", gen2, expectedGen)
 	}
@@ -888,7 +887,7 @@ func TestResyncReserveInterleaved(t *testing.T) {
 	// The fingerprint mismatch means nrtUpdates will be empty for node1.
 	lh := testr.New(t)
 	nodes := nrtCache.GetDesyncedNodes(lh)
-	nrtUpdates := nrtCache.MakeNRTUpdatesForNodes(ctx, lh, nodes, map[string][]podData{})
+	nrtUpdates := nrtCache.MakeNRTUpdatesForNodes(ctx, lh, nodes)
 
 	if len(nrtUpdates) != 0 {
 		t.Fatalf("expected no NRT updates due to fingerprint mismatch, got %d", len(nrtUpdates))
@@ -922,7 +921,7 @@ func TestResyncReserveInterleaved(t *testing.T) {
 	nrtCache.ReserveNodeResources("node1", concurrentPod)
 
 	// Step 4: Resync finishes — FlushNodes with the (empty) update list.
-	nrtCache.FlushNodes(lh, map[string][]podData{}, nrtUpdates...)
+	nrtCache.FlushNodes(lh, nrtUpdates...)
 
 	// Verify: node1 must still be dirty — the resync failed (fingerprint
 	// mismatch) and Reserve must NOT have cleared the dirty bit.
@@ -1060,24 +1059,25 @@ func mustOverReserve(t *testing.T, client ctrlclient.WithWatch, podLister podpro
 	return obj
 }
 
-func TestMakeNodeToPodDataMap(t *testing.T) {
+func TestCategorizePodsOnNode(t *testing.T) {
 	tcases := []struct {
 		description   string
 		pods          []*corev1.Pod
 		isPodRelevant podprovider.PodFilterFunc
+		nodeName      string
 		err           error
-		expected      map[string][]podData
+		expected      []podData
 		expectedErr   error
 	}{
 		{
 			description:   "empty pod list - shared",
 			isPodRelevant: podprovider.IsPodRelevantShared,
-			expected:      make(map[string][]podData),
+			nodeName:      "node1",
 		},
 		{
 			description:   "empty pod list - dedicated",
 			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected:      make(map[string][]podData),
+			nodeName:      "node1",
 		},
 		{
 			description: "single pod NOT running - succeeded (kubernetes jobs) - dedicated",
@@ -1096,40 +1096,11 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				},
 			},
 			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected: map[string][]podData{
-				"node1": {
-					{
-						Namespace:                        "namespace1",
-						Name:                             "pod1",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
-				},
-			},
-		},
-		{
-			description: "single pod NOT running - failed",
-			pods: []*corev1.Pod{
+			nodeName:      "node1",
+			expected: []podData{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "namespace1",
-						Name:      "pod1",
-					},
-					Spec: corev1.PodSpec{
-						NodeName: "node1",
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodFailed,
-					},
-				},
-			},
-			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected: map[string][]podData{
-				"node1": {
-					{
-						Namespace:                        "namespace1",
-						Name:                             "pod1",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
+					Namespace: "namespace1",
+					Name:      "pod1",
 				},
 			},
 		},
@@ -1150,26 +1121,7 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				},
 			},
 			isPodRelevant: podprovider.IsPodRelevantShared,
-			expected:      map[string][]podData{},
-		},
-		{
-			description: "single pod NOT running - failed - shared",
-			pods: []*corev1.Pod{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "namespace1",
-						Name:      "pod1",
-					},
-					Spec: corev1.PodSpec{
-						NodeName: "node1",
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodFailed,
-					},
-				},
-			},
-			isPodRelevant: podprovider.IsPodRelevantShared,
-			expected:      map[string][]podData{},
+			nodeName:      "node1",
 		},
 		{
 			description: "single pod running - dedicated",
@@ -1188,18 +1140,16 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				},
 			},
 			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected: map[string][]podData{
-				"node1": {
-					{
-						Namespace:                        "namespace1",
-						Name:                             "pod1",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
+			nodeName:      "node1",
+			expected: []podData{
+				{
+					Namespace: "namespace1",
+					Name:      "pod1",
 				},
 			},
 		},
 		{
-			description: "single pod running - shared",
+			description: "pods on different nodes - only target node returned",
 			pods: []*corev1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1213,15 +1163,25 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 						Phase: corev1.PodRunning,
 					},
 				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace1",
+						Name:      "pod2",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node2",
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
 			},
 			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected: map[string][]podData{
-				"node1": {
-					{
-						Namespace:                        "namespace1",
-						Name:                             "pod1",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
+			nodeName:      "node1",
+			expected: []podData{
+				{
+					Namespace: "namespace1",
+					Name:      "pod1",
 				},
 			},
 		},
@@ -1266,23 +1226,19 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				},
 			},
 			isPodRelevant: podprovider.IsPodRelevantDedicated,
-			expected: map[string][]podData{
-				"node1": {
-					{
-						Namespace:                        "namespace1",
-						Name:                             "pod1",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
-					{
-						Namespace:                        "namespace2",
-						Name:                             "pod2",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
-					{
-						Namespace:                        "namespace2",
-						Name:                             "pod3",
-						ContainersWithExclusiveResources: []numaplacement.ContainerID{},
-					},
+			nodeName:      "node1",
+			expected: []podData{
+				{
+					Namespace: "namespace1",
+					Name:      "pod1",
+				},
+				{
+					Namespace: "namespace2",
+					Name:      "pod2",
+				},
+				{
+					Namespace: "namespace2",
+					Name:      "pod3",
 				},
 			},
 		},
@@ -1296,7 +1252,7 @@ func TestMakeNodeToPodDataMap(t *testing.T) {
 				filter: tcase.isPodRelevant,
 			}
 			nrtResourcesLookup := func(nodeName string) sets.Set[corev1.ResourceName] { return nil }
-			got, err := makeNodeToPodDataMap(testr.New(t), podLister, nrtResourcesLookup)
+			got, err := categorizePodsOnNode(testr.New(t), podLister, tcase.nodeName, nrtResourcesLookup)
 			if err != tcase.expectedErr {
 				t.Errorf("error mismatch: got %v expected %v", err, tcase.expectedErr)
 			}
@@ -1336,7 +1292,7 @@ func TestOverresevedGetCachedNRTCopyWithForeignPods(t *testing.T) {
 	}
 
 	// pointless, but will force a generation increase
-	gen := nrtCache.FlushNodes(lh, map[string][]podData{}, nrt)
+	gen := nrtCache.FlushNodes(lh, nrtUpdate{nrt: nrt})
 	if gen == 0 {
 		t.Fatalf("FlushNodes didn't increase the generation")
 	}

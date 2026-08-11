@@ -28,9 +28,7 @@ import (
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 
@@ -277,19 +275,12 @@ func (ov *OverReserve) Resync() {
 		return
 	}
 
-	// node -> pod identifier (namespace, name)
-	nodeToObjsMap, err := makeNodeToPodDataMap(lh_, ov.podLister, ov.nrtResNames.Get)
-	if err != nil {
-		lh_.Error(err, "cannot find the mapping between running pods and nodes")
-		return
-	}
-
-	nrtUpdates := ov.MakeNRTUpdatesForNodes(context.Background(), lh_, nodes, nodeToObjsMap)
+	nrtUpdates := ov.MakeNRTUpdatesForNodes(context.Background(), lh_, nodes)
 
 	ov.FlushNodes(lh_, nrtUpdates...)
 }
 
-func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logger, nodes DesyncedNodes, nodeToObjsMap map[string][]podData) []nrtUpdate {
+func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logger, nodes DesyncedNodes) []nrtUpdate {
 	var nrtUpdates []nrtUpdate
 
 	for _, nodeName := range nodes.MaybeOverReserved {
@@ -305,10 +296,9 @@ func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logg
 			continue
 		}
 
-		objs, ok := nodeToObjsMap[nodeName]
-		if !ok {
-			// this really should never happen
-			lh.Info("cannot find any pod for node")
+		objs, err := categorizePodsOnNode(lh, ov.podLister, nodeName, ov.nrtResNames.Get)
+		if err != nil {
+			lh.Error(err, "cannot list pods for node")
 			continue
 		}
 
@@ -320,7 +310,7 @@ func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logg
 
 		lh.V(4).Info("trying to sync NodeTopology", "fingerprint", pfpExpected, "onlyExclusiveResources", onlyExclRes)
 
-		err := checkPodFingerprintForNode(lh, objs, nodeName, pfpExpected, onlyExclRes)
+		err = checkPodFingerprintForNode(lh, objs, nodeName, pfpExpected, onlyExclRes)
 		if errors.Is(err, podfingerprint.ErrSignatureMismatch) {
 			// can happen, not critical
 			lh.V(4).Info("NodeTopology podset fingerprint mismatch")
@@ -352,10 +342,9 @@ func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logg
 			continue
 		}
 
-		objs, ok := nodeToObjsMap[nodeName]
-		if !ok {
-			// this really should never happen
-			lh.Info("cannot find any pod for node")
+		objs, err := categorizePodsOnNode(lh, ov.podLister, nodeName, ov.nrtResNames.Get)
+		if err != nil {
+			lh.Error(err, "cannot list pods for node")
 			continue
 		}
 
@@ -405,45 +394,38 @@ func (ov *OverReserve) TestOnlyUpdateNRT(nrt *topologyv1alpha2.NodeResourceTopol
 	})
 }
 
-func categorizePod(pod *corev1.Pod, nrtResources sets.Set[corev1.ResourceName]) podData {
-	qos := v1qos.GetPodQOS(pod)
-	ret := podData{
-		Namespace: pod.Namespace,
-		Name:      pod.Name,
-	}
-	for _, ctr := range pod.Spec.InitContainers {
-		// filter out init containers with restart policy other than Always because these are *supposed* to
-		// run fast and finish, hence not consuming exclusive resources in a steady state while the pod is Running.
-		if !util.IsSidecarInitContainer(&ctr) {
-			continue
-		}
-		if !resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
-			continue
-		}
-		ret.PinnedContainers = append(ret.PinnedContainers, ctr.Name)
-	}
-	for _, ctr := range pod.Spec.Containers {
-		if !resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
-			continue
-		}
-		ret.PinnedContainers = append(ret.PinnedContainers, ctr.Name)
-	}
-	return ret
-}
-
-func makeNodeToPodDataMap(lh logr.Logger, podLister podprovider.Lister, nrtResourcesLookup NRTResourcesLookupFunc) (map[string][]podData, error) {
-	nodeToObjsMap := make(map[string][]podData)
-	pods, err := podLister.List(lh, labels.Everything())
+func categorizePodsOnNode(lh logr.Logger, podLister podprovider.Lister, nodeName string, nrtResourcesLookup NRTResourcesLookupFunc) ([]podData, error) {
+	pods, err := podLister.ListByNode(lh, nodeName)
 	if err != nil {
-		return nodeToObjsMap, err
+		return nil, err
 	}
+	if len(pods) == 0 {
+		return nil, nil
+	}
+	nrtResources := nrtResourcesLookup(nodeName)
+	objs := make([]podData, 0, len(pods))
 	for _, pod := range pods {
-		nrtResources := nrtResourcesLookup(pod.Spec.NodeName)
-		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
-		nodeObjs = append(nodeObjs, categorizePod(pod, nrtResources))
-		nodeToObjsMap[pod.Spec.NodeName] = nodeObjs
+		qos := v1qos.GetPodQOS(pod)
+		pd := podData{
+			Namespace: pod.Namespace,
+			Name:      pod.Name,
+		}
+		for _, ctr := range pod.Spec.InitContainers {
+			if !util.IsSidecarInitContainer(&ctr) {
+				continue
+			}
+			if resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
+				pd.PinnedContainers = append(pd.PinnedContainers, ctr.Name)
+			}
+		}
+		for _, ctr := range pod.Spec.Containers {
+			if resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
+				pd.PinnedContainers = append(pd.PinnedContainers, ctr.Name)
+			}
+		}
+		objs = append(objs, pd)
 	}
-	return nodeToObjsMap, nil
+	return objs, nil
 }
 
 func getCacheResyncMethod(lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache) apiconfig.CacheResyncMethod {

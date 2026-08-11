@@ -18,6 +18,7 @@ package podprovider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -37,11 +38,26 @@ type PodFilterFunc func(lh logr.Logger, pod *corev1.Pod) bool
 
 type Lister interface {
 	List(lh logr.Logger, selector labels.Selector) ([]*corev1.Pod, error)
+	ListByNode(lh logr.Logger, nodeName string) ([]*corev1.Pod, error)
+}
+
+const NodeNameIndexKey = "spec.nodeName"
+
+func PodNodeNameIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T", obj)
+	}
+	if pod.Spec.NodeName == "" {
+		return nil, nil
+	}
+	return []string{pod.Spec.NodeName}, nil
 }
 
 type filteredLister struct {
-	lister podlisterv1.PodLister
-	filter PodFilterFunc
+	lister  podlisterv1.PodLister
+	indexer cache.Indexer
+	filter  PodFilterFunc
 }
 
 func (fl *filteredLister) List(lh logr.Logger, selector labels.Selector) ([]*corev1.Pod, error) {
@@ -59,18 +75,45 @@ func (fl *filteredLister) List(lh logr.Logger, selector labels.Selector) ([]*cor
 	return ret, nil
 }
 
+func (fl *filteredLister) ListByNode(lh logr.Logger, nodeName string) ([]*corev1.Pod, error) {
+	objs, err := fl.indexer.ByIndex(NodeNameIndexKey, nodeName)
+	if err != nil {
+		return nil, err
+	}
+	ret := []*corev1.Pod{}
+	for _, obj := range objs {
+		pod, ok := obj.(*corev1.Pod)
+		if !ok {
+			continue
+		}
+		if !fl.filter(lh, pod) {
+			continue
+		}
+		ret = append(ret, pod)
+	}
+	return ret, nil
+}
+
 func NewFromHandle(lh logr.Logger, handle fwk.Handle, cacheConf *apiconfig.NodeResourceTopologyCache) (k8scache.SharedIndexInformer, Lister) {
 	dedicated := wantsDedicatedInformer(cacheConf)
 	if !dedicated {
 		podHandle := handle.SharedInformerFactory().Core().V1().Pods() // shortcut
-		return podHandle.Informer(), &filteredLister{
-			lister: podHandle.Lister(),
-			filter: IsPodRelevantShared,
+		informer := podHandle.Informer()
+		indexer := informer.GetIndexer()
+		if err := informer.AddIndexers(cache.Indexers{NodeNameIndexKey: PodNodeNameIndexFunc}); err != nil {
+			lh.V(2).Info("failed to add node name indexer to shared informer", "error", err)
+		}
+		return informer, &filteredLister{
+			lister:  podHandle.Lister(),
+			indexer: indexer,
+			filter:  IsPodRelevantShared,
 		}
 	}
 
-	podInformer := coreinformers.NewFilteredPodInformer(handle.ClientSet(), metav1.NamespaceAll, 0, cache.Indexers{}, nil)
-	podLister := podlisterv1.NewPodLister(podInformer.GetIndexer())
+	nodeNameIndexers := cache.Indexers{NodeNameIndexKey: PodNodeNameIndexFunc}
+	podInformer := coreinformers.NewFilteredPodInformer(handle.ClientSet(), metav1.NamespaceAll, 0, nodeNameIndexers, nil)
+	indexer := podInformer.GetIndexer()
+	podLister := podlisterv1.NewPodLister(indexer)
 
 	lh.V(5).Info("start custom pod informer")
 	ctx := context.Background()
@@ -81,8 +124,9 @@ func NewFromHandle(lh logr.Logger, handle fwk.Handle, cacheConf *apiconfig.NodeR
 	lh.V(5).Info("synced custom pod informer")
 
 	return podInformer, &filteredLister{
-		lister: podLister,
-		filter: IsPodRelevantDedicated,
+		lister:  podLister,
+		indexer: indexer,
+		filter:  IsPodRelevantDedicated,
 	}
 }
 
