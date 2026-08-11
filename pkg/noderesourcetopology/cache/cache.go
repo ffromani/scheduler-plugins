@@ -25,6 +25,17 @@ import (
 	"github.com/k8stopologyawareschedwg/numaplacement"
 )
 
+type podData struct {
+	Namespace        string
+	Name             string
+	PinnedContainers []string // containers with exclusive resources
+}
+
+type nrtUpdate struct {
+	nrt  *topologyv1alpha2.NodeResourceTopology
+	pods []podData
+}
+
 type CachedNRTInfo struct {
 	// Generation is akin to the object resourceVersion and represents
 	// the observed state in the cache. It's an opaque monotonically increasing number which can only compared for equality

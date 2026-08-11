@@ -165,13 +165,14 @@ func (rs *nrtResourcesStore) Delete(nodeName string) {
 // If there is an NRT update, there should also be a NUMAPlacement update with new set of pod data.
 // if pod data is empty, it means that NUMAPlacement is irrelevant for this node.
 // NUMAPlacement decoding is deferred to the first call to GetNUMAPlacementInfoByNodeName.
-func (nrs *nrtStore) Update(nrt *topologyv1alpha2.NodeResourceTopology, pods ...podData) {
-	nrs.data[nrt.Name] = nodeCacheEntry{
-		nrt:  nrt.DeepCopy(),
-		pods: pods,
+func (nrs *nrtStore) Update(obj nrtUpdate) {
+	nodeName := obj.nrt.Name
+	nrs.data[nodeName] = nodeCacheEntry{
+		nrt:  obj.nrt.DeepCopy(),
+		pods: obj.pods,
 		// numaPlacement is nil: decode happens lazily on first GetNUMAPlacementInfoByNodeName call
 	}
-	nrs.lh.V(5).Info("updated cached NodeTopology", "node", nrt.Name)
+	nrs.lh.V(5).Info("updated cached NodeTopology", "node", nodeName)
 }
 
 func getNUMAPlacementInfo(lh logr.Logger, nrt topologyv1alpha2.NodeResourceTopology, pods []podData) numaplacement.EncodedInfo {
@@ -255,7 +256,13 @@ func getNUMAPlacementInfo(lh logr.Logger, nrt topologyv1alpha2.NodeResourceTopol
 func getNUMAEligibleContainers(pods []podData) []numaplacement.ContainerID {
 	res := []numaplacement.ContainerID{}
 	for _, pod := range pods {
-		res = append(res, pod.ContainersWithExclusiveResources...)
+		for _, ctr := range pod.PinnedContainers {
+			res = append(res, numaplacement.ContainerID{
+				Namespace:     pod.Namespace,
+				PodName:       pod.Name,
+				ContainerName: ctr,
+			})
+		}
 	}
 	return res
 }
@@ -415,12 +422,6 @@ func podFingerprintForNodeTopology(nrt *topologyv1alpha2.NodeResourceTopology, m
 	return "", false
 }
 
-type podData struct {
-	Namespace                        string
-	Name                             string
-	ContainersWithExclusiveResources []numaplacement.ContainerID
-}
-
 // checkPodFingerprintForNode verifies if the given pods fingeprint (usually from NRT update) matches the
 // computed one using the stored data about pods running on nodes. Returns nil on success, or an error
 // describing the failure
@@ -428,7 +429,7 @@ func checkPodFingerprintForNode(lh logr.Logger, objs []podData, nodeName, pfpExp
 	st := podfingerprint.MakeStatus(nodeName)
 	pfp := podfingerprint.NewTracingFingerprint(len(objs), &st)
 	for _, obj := range objs {
-		if onlyExclRes && len(obj.ContainersWithExclusiveResources) == 0 {
+		if onlyExclRes && len(obj.PinnedContainers) == 0 {
 			continue
 		}
 		pfp.Add(obj.Namespace, obj.Name)

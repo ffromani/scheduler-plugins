@@ -30,7 +30,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,6 +41,7 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/podprovider"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
+	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
 type OverReserve struct {
@@ -283,11 +286,11 @@ func (ov *OverReserve) Resync() {
 
 	nrtUpdates := ov.MakeNRTUpdatesForNodes(context.Background(), lh_, nodes, nodeToObjsMap)
 
-	ov.FlushNodes(lh_, nodeToObjsMap, nrtUpdates...)
+	ov.FlushNodes(lh_, nrtUpdates...)
 }
 
-func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logger, nodes DesyncedNodes, nodeToObjsMap map[string][]podData) []*topologyv1alpha2.NodeResourceTopology {
-	var nrtUpdates []*topologyv1alpha2.NodeResourceTopology
+func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logger, nodes DesyncedNodes, nodeToObjsMap map[string][]podData) []nrtUpdate {
+	var nrtUpdates []nrtUpdate
 
 	for _, nodeName := range nodes.MaybeOverReserved {
 		lh := lh_.WithValues(logging.KeyNode, nodeName)
@@ -330,7 +333,10 @@ func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logg
 		}
 
 		lh.V(4).Info("overriding cached info", "reason", "resynced")
-		nrtUpdates = append(nrtUpdates, nrtCandidate)
+		nrtUpdates = append(nrtUpdates, nrtUpdate{
+			nrt:  nrtCandidate,
+			pods: objs,
+		})
 	}
 
 	for _, nodeName := range nodes.ConfigChanged {
@@ -346,30 +352,41 @@ func (ov *OverReserve) MakeNRTUpdatesForNodes(ctx context.Context, lh_ logr.Logg
 			continue
 		}
 
+		objs, ok := nodeToObjsMap[nodeName]
+		if !ok {
+			// this really should never happen
+			lh.Info("cannot find any pod for node")
+			continue
+		}
+
 		lh.V(4).Info("overriding cached info", "reason", "configChanged")
-		nrtUpdates = append(nrtUpdates, nrtCandidate)
+		nrtUpdates = append(nrtUpdates, nrtUpdate{
+			nrt:  nrtCandidate,
+			pods: objs,
+		})
 	}
 
 	return nrtUpdates
 }
 
 // FlushNodes drops all the cached information about a given node, resetting its state clean.
-func (ov *OverReserve) FlushNodes(lh logr.Logger, nodeToObjsMap map[string][]podData, nrts ...*topologyv1alpha2.NodeResourceTopology) uint64 {
+func (ov *OverReserve) FlushNodes(lh logr.Logger, nrtUpdates ...nrtUpdate) uint64 {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 
-	if len(nrts) == 0 {
+	if len(nrtUpdates) == 0 {
 		return ov.generation
 	}
 
-	for _, nrt := range nrts {
-		lh.V(2).Info("flushing", logging.KeyNode, nrt.Name)
-		ov.nrts.Update(nrt, nodeToObjsMap[nrt.Name]...)
-		ov.nrtResNames.Update(nrt)
-		delete(ov.assumedResources, nrt.Name)
-		ov.nodesMaybeOverreserved.Delete(nrt.Name)
-		ov.nodesWithForeignPods.Delete(nrt.Name)
-		ov.nodesWithAttrUpdate.Delete(nrt.Name)
+	for _, nrtUpdate := range nrtUpdates {
+		nodeName := nrtUpdate.nrt.Name
+		lh.V(2).Info("flushing", logging.KeyNode, nodeName)
+		ov.nrts.Update(nrtUpdate)
+		ov.nrtResNames.Update(nrtUpdate.nrt)
+		delete(ov.assumedResources, nodeName)
+		ov.nodesMaybeOverreserved.Delete(nodeName)
+		ov.nodesWithForeignPods.Delete(nodeName)
+		ov.nodesWithAttrUpdate.Delete(nodeName)
 	}
 
 	// increase only if we mutated the internal state
@@ -383,7 +400,35 @@ func (ov *OverReserve) FlushNodes(lh logr.Logger, nodeToObjsMap map[string][]pod
 func (ov *OverReserve) TestOnlyUpdateNRT(nrt *topologyv1alpha2.NodeResourceTopology) {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
-	ov.nrts.Update(nrt)
+	ov.nrts.Update(nrtUpdate{
+		nrt: nrt,
+	})
+}
+
+func categorizePod(pod *corev1.Pod, nrtResources sets.Set[corev1.ResourceName]) podData {
+	qos := v1qos.GetPodQOS(pod)
+	ret := podData{
+		Namespace: pod.Namespace,
+		Name:      pod.Name,
+	}
+	for _, ctr := range pod.Spec.InitContainers {
+		// filter out init containers with restart policy other than Always because these are *supposed* to
+		// run fast and finish, hence not consuming exclusive resources in a steady state while the pod is Running.
+		if !util.IsSidecarInitContainer(&ctr) {
+			continue
+		}
+		if !resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
+			continue
+		}
+		ret.PinnedContainers = append(ret.PinnedContainers, ctr.Name)
+	}
+	for _, ctr := range pod.Spec.Containers {
+		if !resourcerequests.IsExclusiveForContainer(qos, ctr, nrtResources) {
+			continue
+		}
+		ret.PinnedContainers = append(ret.PinnedContainers, ctr.Name)
+	}
+	return ret
 }
 
 func makeNodeToPodDataMap(lh logr.Logger, podLister podprovider.Lister, nrtResourcesLookup NRTResourcesLookupFunc) (map[string][]podData, error) {
@@ -395,11 +440,7 @@ func makeNodeToPodDataMap(lh logr.Logger, podLister podprovider.Lister, nrtResou
 	for _, pod := range pods {
 		nrtResources := nrtResourcesLookup(pod.Spec.NodeName)
 		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
-		nodeObjs = append(nodeObjs, podData{
-			Namespace:                        pod.Namespace,
-			Name:                             pod.Name,
-			ContainersWithExclusiveResources: resourcerequests.GetContainersWithExclusiveResources(pod, nrtResources),
-		})
+		nodeObjs = append(nodeObjs, categorizePod(pod, nrtResources))
 		nodeToObjsMap[pod.Spec.NodeName] = nodeObjs
 	}
 	return nodeToObjsMap, nil
