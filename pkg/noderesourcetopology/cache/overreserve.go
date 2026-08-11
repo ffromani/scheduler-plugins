@@ -30,7 +30,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	podlisterv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,13 +54,12 @@ type OverReserve struct {
 	nodesMaybeOverreserved counter
 	nodesWithForeignPods   counter
 	nodesWithAttrUpdate    counter
-	podLister              podlisterv1.PodLister
+	podLister              podprovider.Lister
 	resyncMethod           apiconfig.CacheResyncMethod
 	resyncScope            apiconfig.CacheResyncScope
-	isPodRelevant          podprovider.PodFilterFunc
 }
 
-func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.WithWatch, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
+func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.WithWatch, podLister podprovider.Lister) (*OverReserve, error) {
 	if client == nil || podLister == nil {
 		return nil, fmt.Errorf("received nil references")
 	}
@@ -86,7 +84,6 @@ func NewOverReserve(ctx context.Context, lh logr.Logger, cfg *apiconfig.NodeReso
 		nodesWithAttrUpdate:    newCounter(),
 		podLister:              podLister,
 		resyncMethod:           resyncMethod,
-		isPodRelevant:          isPodRelevant,
 	}
 
 	if resyncScope == apiconfig.CacheResyncScopeAll {
@@ -278,7 +275,7 @@ func (ov *OverReserve) Resync() {
 	}
 
 	// node -> pod identifier (namespace, name)
-	nodeToObjsMap, err := makeNodeToPodDataMap(lh_, ov.podLister, ov.isPodRelevant, ov.nrtResNames.Get)
+	nodeToObjsMap, err := makeNodeToPodDataMap(lh_, ov.podLister, ov.nrtResNames.Get)
 	if err != nil {
 		lh_.Error(err, "cannot find the mapping between running pods and nodes")
 		return
@@ -389,16 +386,13 @@ func (ov *OverReserve) TestOnlyUpdateNRT(nrt *topologyv1alpha2.NodeResourceTopol
 	ov.nrts.Update(nrt)
 }
 
-func makeNodeToPodDataMap(lh logr.Logger, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc, nrtResourcesLookup NRTResourcesLookupFunc) (map[string][]podData, error) {
+func makeNodeToPodDataMap(lh logr.Logger, podLister podprovider.Lister, nrtResourcesLookup NRTResourcesLookupFunc) (map[string][]podData, error) {
 	nodeToObjsMap := make(map[string][]podData)
-	pods, err := podLister.List(labels.Everything())
+	pods, err := podLister.List(lh, labels.Everything())
 	if err != nil {
 		return nodeToObjsMap, err
 	}
 	for _, pod := range pods {
-		if !isPodRelevant(lh, pod) {
-			continue
-		}
 		nrtResources := nrtResourcesLookup(pod.Spec.NodeName)
 		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
 		nodeObjs = append(nodeObjs, podData{
